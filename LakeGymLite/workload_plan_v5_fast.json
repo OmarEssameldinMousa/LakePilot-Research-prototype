@@ -1,0 +1,38 @@
+{
+    "name": "LakeGym v5 Fast-Switching Workload",
+    "description": "1000-step experiment with rapidly shifting workload profiles (50-step phases, 4 full cycles). Designed to stress-test partition adaptation and generate richer partition training data.",
+    "total_steps": 1000,
+    "workload_schedule": [
+        {"start": 1,    "end": 50,   "profile": "time_heavy",    "description": "Cycle 1 — Time-range queries dominate"},
+        {"start": 51,   "end": 100,  "profile": "region_heavy",  "description": "Cycle 1 — Region-filter queries dominate"},
+        {"start": 101,  "end": 150,  "profile": "mixed",          "description": "Cycle 1 — Balanced workload"},
+        {"start": 151,  "end": 200,  "profile": "type_heavy",    "description": "Cycle 1 — Type-filter queries dominate"},
+        {"start": 201,  "end": 250,  "profile": "scan_heavy",    "description": "Cycle 1 — Full scans increase"},
+
+        {"start": 251,  "end": 300,  "profile": "region_heavy",  "description": "Cycle 2 — Region-filter queries dominate"},
+        {"start": 301,  "end": 350,  "profile": "time_heavy",    "description": "Cycle 2 — Time-range queries dominate"},
+        {"start": 351,  "end": 400,  "profile": "type_heavy",    "description": "Cycle 2 — Type-filter queries dominate"},
+        {"start": 401,  "end": 450,  "profile": "mixed",          "description": "Cycle 2 — Balanced workload"},
+        {"start": 451,  "end": 500,  "profile": "scan_heavy",    "description": "Cycle 2 — Full scans increase"},
+
+        {"start": 501,  "end": 550,  "profile": "type_heavy",    "description": "Cycle 3 — Type-filter queries dominate"},
+        {"start": 551,  "end": 600,  "profile": "scan_heavy",    "description": "Cycle 3 — Full scans increase"},
+        {"start": 601,  "end": 650,  "profile": "time_heavy",    "description": "Cycle 3 — Time-range queries dominate"},
+        {"start": 651,  "end": 700,  "profile": "region_heavy",  "description": "Cycle 3 — Region-filter queries dominate"},
+        {"start": 701,  "end": 750,  "profile": "mixed",          "description": "Cycle 3 — Balanced workload"},
+
+        {"start": 751,  "end": 800,  "profile": "scan_heavy",    "description": "Cycle 4 — Full scans increase"},
+        {"start": 801,  "end": 850,  "profile": "type_heavy",    "description": "Cycle 4 — Type-filter queries dominate"},
+        {"start": 851,  "end": 900,  "profile": "region_heavy",  "description": "Cycle 4 — Region-filter queries dominate"},
+        {"start": 901,  "end": 950,  "profile": "time_heavy",    "description": "Cycle 4 — Time-range queries dominate"},
+        {"start": 951,  "end": 1000, "profile": "mixed",          "description": "Cycle 4 — Balanced workload"}
+    ],
+    "ingestion_schedule": [
+        {"start": 1,   "end": 100,  "rows_min": 30,  "rows_max": 50,  "description": "Warm-up (low)"},
+        {"start": 101, "end": 300,  "rows_min": 50,  "rows_max": 100, "description": "Normal load"},
+        {"start": 301, "end": 500,  "rows_min": 150, "rows_max": 300, "description": "Burst (high)"},
+        {"start": 501, "end": 700,  "rows_min": 30,  "rows_max": 80,  "description": "Recovery (low-med)"},
+        {"start": 701, "end": 900,  "rows_min": 50,  "rows_max": 100, "description": "Normal load 2"},
+        {"start": 901, "end": 1000, "rows_min": 20,  "rows_max": 50,  "description": "Wind-down"}
+    ]
+}

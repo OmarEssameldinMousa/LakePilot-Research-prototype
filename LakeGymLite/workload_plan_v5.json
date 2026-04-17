@@ -1,0 +1,20 @@
+{
+    "name": "LakeGym v5 Standard Workload",
+    "description": "1000-step experiment with shifting workload profiles and variable ingestion rates.",
+    "total_steps": 1000,
+    "workload_schedule": [
+        {"start": 1,   "end": 200,  "profile": "time_heavy",   "description": "Time-range queries dominate"},
+        {"start": 201, "end": 400,  "profile": "region_heavy",  "description": "Region-filter queries dominate"},
+        {"start": 401, "end": 600,  "profile": "mixed",         "description": "Balanced workload"},
+        {"start": 601, "end": 800,  "profile": "type_heavy",    "description": "Type-filter queries dominate"},
+        {"start": 801, "end": 1000, "profile": "scan_heavy",    "description": "Full scans increase"}
+    ],
+    "ingestion_schedule": [
+        {"start": 1,   "end": 100,  "rows_min": 30,  "rows_max": 50,  "description": "Warm-up (low)"},
+        {"start": 101, "end": 300,  "rows_min": 50,  "rows_max": 100, "description": "Normal load"},
+        {"start": 301, "end": 500,  "rows_min": 150, "rows_max": 300, "description": "Burst (high)"},
+        {"start": 501, "end": 700,  "rows_min": 30,  "rows_max": 80,  "description": "Recovery (low-med)"},
+        {"start": 701, "end": 900,  "rows_min": 50,  "rows_max": 100, "description": "Normal load 2"},
+        {"start": 901, "end": 1000, "rows_min": 20,  "rows_max": 50,  "description": "Wind-down"}
+    ]
+}

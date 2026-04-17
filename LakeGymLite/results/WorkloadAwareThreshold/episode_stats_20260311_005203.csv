@@ -1,0 +1,2 @@
+episode,steps,time_sec,total_steps,avg_latency,avg_global_reward,total_global_reward,count,action_distribution
+1,1000,1459.1,1000,633.51,0.1689,168.9021,1000,"{'NOOP': 781, 'COMPACT_64KB': 206, 'PARTITION_HOUR': 5, 'PARTITION_REGION': 4, 'PARTITION_EVENT_TYPE': 4}"

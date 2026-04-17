@@ -1,0 +1,148 @@
+
+services:
+  spark-master:
+    build: ./spark-cluster
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"   # Web UI
+      - "7077:7077"   # Cluster connection
+    environment:
+      - SPARK_MASTER_HOST=0.0.0.0
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=eu-central-1
+      - AWS_DEFAULT_REGION=eu-central-1 
+    volumes:
+      - ./spark-cluster/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./warehouse:/home/iceberg/warehouse
+    command: >
+      bash -c "
+        start-master.sh && tail -f /dev/null
+      "
+    networks:
+      - iceberg_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 5s
+      timeout: 5s
+      retries: 1
+
+  # NOTE: spark-worker not used in research mode (local[1])
+  # Kept for future cluster mode testing
+  spark-worker-1:
+    build: ./spark-cluster
+    hostname: spark-worker-1
+    container_name: spark-worker-1
+    environment:
+      - SPARK_WORKER_MEMORY=2g
+      - SPARK_WORKER_CORES=1
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=eu-central-1
+      - AWS_DEFAULT_REGION=eu-central-1 
+    volumes:
+      - ./spark-cluster/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+    command: >
+      bash -c "
+        start-worker.sh spark://spark-master:7077 && tail -f /dev/null
+      "
+    networks:
+      - iceberg_net
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 5s
+      timeout: 5s
+      retries: 1
+
+
+  rest:
+    image: apache/iceberg-rest-fixture
+    container_name: iceberg-rest
+    depends_on:
+      mc:
+        condition: service_started
+    networks:
+      - iceberg_net
+    ports:
+      - "8181:8181"
+    environment:
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=eu-central-1
+      - CATALOG_WAREHOUSE=s3://warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH__STYLE__ACCESS=true # <-- Add this line
+
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=password
+      - MINIO_REGION=eu-central-1
+    networks:
+      iceberg_net:
+        aliases:
+          - warehouse.minio
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 1
+
+  mc:
+    image: minio/mc
+    container_name: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - iceberg_net
+    entrypoint: |
+      /bin/sh -c "
+      until (/usr/bin/mc alias set minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc rm -r --force minio/warehouse;
+      /usr/bin/mc mb minio/warehouse;
+      /usr/bin/mc policy set public minio/warehouse;
+      tail -f /dev/null
+      "
+
+  lakegym-lite:
+    build: ./LakeGymLite
+    container_name: lakegym-lite
+    ports:
+      - "8502:8080"
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+      - AWS_ACCESS_KEY_ID=admin
+      - AWS_SECRET_ACCESS_KEY=password
+      - AWS_REGION=eu-central-1
+      - AWS_DEFAULT_REGION=eu-central-1
+    networks:
+      - iceberg_net
+    volumes:
+      - ./LakeGymLite/src:/app/src
+      - ./LakeGymLite/results:/app/results
+      - ./LakeGymLite/trained_models:/app/trained_models
+    depends_on:
+      spark-master:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      rest:
+        condition: service_healthy
+
+networks:
+  iceberg_net:
+    driver: bridge
+

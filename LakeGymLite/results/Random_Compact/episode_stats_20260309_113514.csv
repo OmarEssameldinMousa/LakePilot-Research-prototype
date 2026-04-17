@@ -1,0 +1,2 @@
+episode,steps,time_sec,total_steps,avg_latency,avg_global_reward,total_global_reward,count,action_distribution
+1,1000,2112.3,1000,461.28,0.1782,178.21,1000,"{'NOOP': 252, 'COMPACT_64KB': 266, 'COMPACT_32KB': 228, 'COMPACT_128KB': 254}"

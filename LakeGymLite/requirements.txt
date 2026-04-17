@@ -1,0 +1,11 @@
+pyspark
+pyyaml
+streamlit
+plotly
+duckdb
+graphviz
+watchdog
+pandas
+nicegui
+tensorflow-cpu
+numpy
