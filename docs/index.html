@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LakePilot — Workload-Aware Lakehouse Maintenance with Hierarchical Deep RL</title>
+<meta name="description" content="A hierarchical multi-agent reinforcement learning framework that jointly optimises compaction and partitioning in Apache Iceberg data lakehouses. A proof-of-concept research prototype.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ════════════════ NAV ════════════════ -->
+<nav class="nav" id="nav">
+  <a class="brand" href="#top">
+    <span class="logo"></span> LakePilot
+  </a>
+  <div class="nav-links" id="navLinks">
+    <a href="#problem">Problem</a>
+    <a href="#approach">Approach</a>
+    <a href="#architecture">Architecture</a>
+    <a href="#layers">Stack</a>
+    <a href="#environment">Environment</a>
+    <a href="#experiment">Experiments</a>
+    <a href="#training">Training</a>
+    <a href="#results">Results</a>
+    <a href="#findings">Findings</a>
+    <a class="cta" href="https://github.com/OmarEssameldinMousa/LakePilot-Research-prototype" target="_blank" rel="noopener">GitHub ↗</a>
+  </div>
+  <button class="nav-toggle" id="navToggle" aria-label="Menu">☰</button>
+</nav>
+
+<span id="top"></span>
+
+<!-- ════════════════ HERO ════════════════ -->
+<header class="hero">
+  <div class="wrap">
+    <span class="hero-badge"><span class="pill">PROOF OF CONCEPT</span> Hierarchical Multi-Agent Deep RL · Apache Iceberg</span>
+    <h1>Lakehouses that <span class="accent">maintain themselves.</span></h1>
+    <p class="lead">
+      LakePilot frames data-lakehouse maintenance as a hierarchical reinforcement-learning
+      problem — a rule-based meta-controller arbitrates between two specialist agents that
+      jointly optimise <b>compaction</b> and <b>partitioning</b> in real time, adapting to
+      shifting query workloads instead of obeying fixed heuristics.
+    </p>
+    <p class="authors">
+      <b>Omer Karim</b>, <b>Omar Essameldin</b>, <b>Omar Shrief</b> &amp; <b>Ahmed B. Zaky</b> ·
+      Egypt-Japan University of Science and Technology
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="#results">Explore the results →</a>
+      <a class="btn btn-ghost" href="#problem">Understand the problem</a>
+    </div>
+
+    <div class="hero-stats reveal">
+      <div class="stat"><div class="num">+17.8<span class="unit">%</span></div><div class="lbl">Reward over the best heuristic</div></div>
+      <div class="stat"><div class="num">−82.9<span class="unit">%</span></div><div class="lbl">Cloud cost vs no-maintenance</div></div>
+      <div class="stat"><div class="num">22</div><div class="lbl">Policies benchmarked head-to-head</div></div>
+      <div class="stat"><div class="num">1,000</div><div class="lbl">Step episodes on a real Iceberg table</div></div>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════ PROBLEM ════════════════ -->
+<section id="problem">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">The Problem</div>
+      <h2>Continuous ingestion quietly degrades a lakehouse</h2>
+      <p>
+        Open table formats such as Apache Iceberg, Delta Lake, and Hudi store data as immutable
+        Parquet files with a metadata transaction log. That design gives them ACID semantics on
+        cheap object storage — but it also means every streaming micro-batch lands as <em>new files</em>,
+        and the partition layout chosen on day one slowly falls out of step with how the data is
+        actually queried.
+      </p>
+    </div>
+
+    <div class="logo-strip reveal">
+      <span class="label">Built on open table formats</span>
+      <div class="logos">
+        <img src="assets/logos/iceberg.svg" alt="Apache Iceberg">
+        <img src="assets/logos/delta.svg" class="tall" alt="Delta Lake">
+        <img src="assets/logos/hudi.png" alt="Apache Hudi">
+      </div>
+    </div>
+
+    <div class="grid grid-2 reveal" style="margin-bottom:46px">
+      <div class="card hover">
+        <div class="ico">🧩</div>
+        <h3>The small-file problem</h3>
+        <p>
+          Each ingest commit writes a handful of tiny Parquet files. Over thousands of micro-batches
+          a table accumulates <b>hundreds of small files</b>. Every query must open, decompress, and
+          read the footer of each one — so query planning and scan time grow with file count, not with
+          the data that actually matters. In our environment a neglected table reaches
+          <b>874 files</b> and a <b>4,298 ms</b> mean query latency.
+        </p>
+      </div>
+      <div class="card hover">
+        <div class="ico">🧭</div>
+        <h3>Partition drift</h3>
+        <p>
+          A table partitioned by <span class="cell-code">hour</span> prunes 92% of files for
+          time-range queries — but if the workload shifts toward region filters, that same layout
+          prunes nothing. The optimal partition strategy is a moving target that depends on the
+          <b>current query distribution</b>, which heuristics never observe.
+        </p>
+      </div>
+    </div>
+
+    <div class="chart-card reveal" style="margin-bottom:46px">
+      <h3>The degradation, on a real run</h3>
+      <p class="sub">Actual 1,000-step transition logs — an unmaintained table vs. the AttentivePPO agent. The shaded band is the ingestion burst (steps 301–500, 225 rows/step), where the gap explodes.</p>
+      <div class="grid grid-2">
+        <div>
+          <div style="font-size:.82rem;font-weight:600;color:var(--ink-2);margin-bottom:8px">File count over time</div>
+          <div class="chart-box"><canvas id="chart-problem-files"></canvas></div>
+        </div>
+        <div>
+          <div style="font-size:.82rem;font-weight:600;color:var(--ink-2);margin-bottom:8px">Query latency over time (ms)</div>
+          <div class="chart-box"><canvas id="chart-problem-latency"></canvas></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:18px;font-size:.86rem">
+        <span class="metric-pill"><span style="width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block"></span> No maintenance — ends at 1,624 files / 15,883 ms</span>
+        <span class="metric-pill"><span class="dot-a"></span> AttentivePPO — stays at ~60 files / &lt; 350 ms</span>
+      </div>
+    </div>
+
+    <div class="card reveal">
+      <div class="eyebrow">Why heuristics fall short</div>
+      <p style="color:var(--ink-2);margin-bottom:22px;max-width:70ch">
+        State-of-practice maintenance is either manual or runs on a fixed schedule that is decoupled
+        from the workload — "compact every 10 steps", "always target 64&nbsp;KB files". These rules are
+        <b>workload-agnostic</b>: they cannot tell a quiet period from an ingestion burst, and they never
+        touch the partition layout. Effective maintenance must instead be <b>joint, online, and
+        workload-aware</b>.
+      </p>
+      <div class="problem-flow">
+        <div class="flow-node"><div class="big">20→300</div><div class="cap">rows ingested / step</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><div class="big">874</div><div class="cap">files with no maintenance</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-node"><div class="big">4,298 ms</div><div class="cap">resulting query latency</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ APPROACH ════════════════ -->
+<section id="approach" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow light">The Approach</div>
+      <h2>Separate <em>when to act</em> from <em>what to do</em></h2>
+      <p>
+        LakePilot is a hierarchical, multi-agent framework. A transparent rule-based meta-controller
+        decides <em>whether</em> the table needs attention; two specialist RL agents decide <em>how</em>
+        to act. This split improves interpretability and training stability — each specialist receives
+        a focused reward signal aligned to its own objective.
+      </p>
+    </div>
+    <div class="grid grid-3 reveal">
+      <div class="card hover">
+        <div class="ico" style="background:#23414b">⚖️</div>
+        <h3>Meta-Controller</h3>
+        <p>A rule-based urgency arbitrator. Computes a compaction urgency from file count &amp; block
+        utilisation, and a partition urgency from pruning ratio &amp; workload focus — then delegates to
+        at most one specialist, or stays idle.</p>
+      </div>
+      <div class="card hover">
+        <div class="ico" style="background:#23414b">🗜️</div>
+        <h3>Compaction Agent</h3>
+        <p>Picks a target file size — <span class="cell-code">32&nbsp;/&nbsp;64&nbsp;/&nbsp;128&nbsp;KB</span>
+        or <span class="cell-code">NOOP</span> — to consolidate small files. Trained on a dedicated
+        compaction reward.</p>
+      </div>
+      <div class="card hover">
+        <div class="ico" style="background:#23414b">🗂️</div>
+        <h3>Partition Agent</h3>
+        <p>Chooses a partition strategy — by <span class="cell-code">HOUR / REGION / EVENT_TYPE</span>,
+        <span class="cell-code">REMOVE</span>, or <span class="cell-code">NOOP</span> — to keep the layout
+        aligned with the live query distribution.</p>
+      </div>
+    </div>
+    <div class="grid grid-3 reveal" style="margin-top:22px">
+      <div class="metric-pill"><span class="dot-a"></span> AttentivePPO · attention actor-critic</div>
+      <div class="metric-pill"><span class="dot-m"></span> MLP-PPO · feedforward actor-critic</div>
+      <div class="metric-pill"><span class="dot-d"></span> DDQN · dueling double Q-network</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ ARCHITECTURE ════════════════ -->
+<section id="architecture">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">System Architecture</div>
+      <h2>Three tiers, one shared interface</h2>
+      <p>The environment, the meta-controller, and two specialist agents communicate through a shared
+      model registry exposing a uniform <span class="cell-code">(batch, W, F) → (π, V)</span> API — so
+      any of three neural architectures can be plugged into either specialist.</p>
+    </div>
+
+    <!-- flow diagram -->
+    <div class="card reveal" style="margin-bottom:40px">
+      <div class="arch">
+        <div class="arch-box env">
+          <div class="t">LakeGym v5 Environment</div>
+          <div class="s">Apache Iceberg table · Spark · step pipeline — emits observation oₜ, rewards (r_c, r_p, r_g)</div>
+        </div>
+        <div class="arch-connector"></div>
+        <div class="arch-box meta">
+          <div class="t">⚖️ Meta-Controller</div>
+          <div class="s">Rule-based urgency arbitrator · θ = 0.35 threshold · 4-step &amp; 20-step cooldowns</div>
+        </div>
+        <div class="arch-connector"></div>
+        <div class="arch-split">
+          <div class="leg">
+            <div class="spec c">
+              <div class="t">Compaction Agent</div>
+              <div class="actions">NOOP · C32 · C64 · C128</div>
+              <div class="rw">reward r_c · window W=10</div>
+            </div>
+          </div>
+          <div class="leg">
+            <div class="spec p">
+              <div class="t">Partition Agent</div>
+              <div class="actions">NOOP · HOUR · REGION · TYPE · REMOVE</div>
+              <div class="rw">reward r_p · window W=20</div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-connector"></div>
+        <div class="arch-box" style="min-width:380px">
+          <div class="t">Shared Model Registry</div>
+          <div class="s">uniform (batch, W, F) → (π action-probs, V state-value) · action aₜ returned to env</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- neural architectures tabs -->
+    <div class="reveal">
+      <h3 style="font-size:1.35rem;margin-bottom:6px">The three neural candidates</h3>
+      <p style="color:var(--ink-2);margin-bottom:22px;max-width:65ch">All three accept the same observation window and return a softmax action-probability vector and a scalar state-value estimate.</p>
+      <div class="tabs" data-tabs="arch">
+        <button class="tab-btn active" data-tab="attentive">AttentivePPO</button>
+        <button class="tab-btn" data-tab="mlp">MLP-PPO</button>
+        <button class="tab-btn" data-tab="ddqn">DDQN</button>
+      </div>
+
+      <div class="tab-panel active" data-panel="attentive">
+        <div class="arch-detail">
+          <div>
+            <div class="layer-stack">
+              <div class="layer io">Shared input — observation window (batch, W, F)</div>
+              <div class="layer hl">Dense(64, ReLU) + trainable positional encoding</div>
+              <div class="layer hl">Multi-head self-attention · 4 heads · key dim 64 · dropout 0.1</div>
+              <div class="layer">Residual + LayerNorm</div>
+              <div class="layer">Feed-forward 128→64 (ReLU, dropout 0.1) + residual + LayerNorm</div>
+              <div class="layer">Global average pooling</div>
+              <div class="layer io">Actor Dense(Nₐ, softmax) · Critic Dense(1)</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Why attention wins</h3>
+            <p>The self-attention encoder weights recent observations differentially — exactly what a
+            <b>non-stationary workload</b> demands when query profiles shift between phases. It earns the
+            highest mean global reward (0.2201) and the tightest run-to-run variance
+            (reward CV 5.86%, latency CV 2.33%), and is the only architecture safe for online adaptation.</p>
+            <dl class="kv" style="margin-top:16px">
+              <dt>family</dt><dd>On-policy actor-critic (PPO)</dd>
+              <dt>window</dt><dd>W = 10 (compaction) / 20 (partition)</dd>
+              <dt>online</dt><dd>Stable — +20.3% under adaptation</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="mlp">
+        <div class="arch-detail">
+          <div>
+            <div class="layer-stack">
+              <div class="layer io">Shared input — observation window (batch, W, F)</div>
+              <div class="layer">Flatten</div>
+              <div class="layer hl">Dense(256, ReLU)</div>
+              <div class="layer hl">Dense(128, ReLU)</div>
+              <div class="layer">Dropout(0.1)</div>
+              <div class="layer io">Actor Dense(Nₐ, softmax) · Critic Dense(1)</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>The feedforward baseline</h3>
+            <p>A straightforward actor-critic with no temporal mechanism. It achieves the highest mean
+            pruning ratio (0.203) — most aggressive on partition alignment — but trails on reward
+            (0.2124) and latency (387.8 ms). Online adaptation converges slowly (+4.9%), suggesting a
+            warm-up period is needed before gradient updates help.</p>
+            <dl class="kv" style="margin-top:16px">
+              <dt>family</dt><dd>On-policy actor-critic (PPO)</dd>
+              <dt>strength</dt><dd>Best pruning ratio (0.203)</dd>
+              <dt>online</dt><dd>Slow but stable convergence</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="ddqn">
+        <div class="arch-detail">
+          <div>
+            <div class="layer-stack">
+              <div class="layer io">Shared input — observation window (batch, W, F)</div>
+              <div class="layer">Flatten</div>
+              <div class="layer hl">Dense(256, ReLU) + BatchNorm</div>
+              <div class="layer hl">Dense(128, ReLU) + BatchNorm</div>
+              <div class="layer">Value stream V(s) · Advantage stream A(s,a)</div>
+              <div class="layer">Q = V(s) + A(s,a) − mean A(s) · π = softmax(Q)</div>
+              <div class="layer io">Shared output — (π, V)</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Off-policy, with a catch</h3>
+            <p>The dueling double-DQN reaches the lowest mean latency (323.4 ms) and the highest
+            <em>partition</em> reward of any agent (0.0675) — its Q-value formulation seems to exploit
+            long-horizon pruning. But its experience-replay buffer makes it <b>unstable under online
+            adaptation</b> (−22.2%): once over-compaction enters the buffer, it reinforces itself.</p>
+            <dl class="kv" style="margin-top:16px">
+              <dt>family</dt><dd>Off-policy value-based (replay buffer)</dd>
+              <dt>strength</dt><dd>Lowest latency · best partition reward</dd>
+              <dt>online</dt><dd>⚠ Destabilises — keep weights frozen</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ LAKEHOUSE STACK / LAYERS ════════════════ -->
+<section id="layers">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Where Maintenance Happens</div>
+      <h2>Physical bytes vs. the metadata layer</h2>
+      <p>
+        A common question: <em>"Do you operate on the physical or the virtual layer?"</em> An Iceberg
+        table is two things at once — immutable Parquet files on object storage (the <b>physical layer</b>)
+        and a tree of metadata that describes them (the <b>logical/metadata layer</b>). Every ingested
+        row lands in both. Our agents act at the <b>table-format layer</b> that sits between the query
+        engine and storage — and the diagram below shows exactly which layer each operation touches.
+      </p>
+    </div>
+
+    <div class="stack reveal">
+      <!-- left: the four-layer stack -->
+      <div class="stack-col">
+        <div class="layer-card">
+          <div class="lhead"><span class="badge compute">Compute</span><h4>Query engine &amp; planner</h4></div>
+          <p>Apache Spark. The query planner first reads <em>metadata only</em> to decide which files can be skipped (pruning), then scans the surviving Parquet files. It never opens a file it can prune.</p>
+          <div class="chips"><span class="chip">Spark SQL</span><span class="chip">partition pruning</span><span class="chip">predicate push-down</span></div>
+        </div>
+        <div class="stack-divider">⌄</div>
+        <div class="layer-card">
+          <div class="lhead"><span class="badge catalog">Catalog</span><h4>Table pointer</h4></div>
+          <p>A single pointer to the <em>current</em> table-metadata file. Swapping this pointer atomically is what gives Iceberg its ACID commits.</p>
+          <div class="chips"><span class="chip">current snapshot ref</span></div>
+        </div>
+        <div class="stack-divider">⌄</div>
+        <div class="layer-card is-meta">
+          <div class="lhead"><span class="badge meta">Metadata layer · logical</span><h4>Snapshots → manifest list → manifests</h4></div>
+          <p>The "virtual" layer. For <b>every</b> data file it stores partition values, row counts, and per-column min/max statistics — without ever touching the data. This is what the planner reads to prune, and what compaction &amp; partitioning rewrite.</p>
+          <div class="chips">
+            <span class="chip mfile">metadata.json</span>
+            <span class="chip mfile">snapshot</span>
+            <span class="chip mfile">manifest-list</span>
+            <span class="chip mfile">manifest → file stats</span>
+            <span class="chip mfile">partition spec</span>
+          </div>
+        </div>
+        <div class="stack-divider">⌄</div>
+        <div class="layer-card is-phys">
+          <div class="lhead"><span class="badge phys">Physical layer · storage</span><h4>Immutable Parquet data files</h4></div>
+          <p>The raw bytes on object storage. Each ingest commit writes <em>new</em> small files; nothing is ever modified in place. This is where the small-file problem physically accumulates.</p>
+          <div class="chips">
+            <span class="chip file">part-0001.parquet</span>
+            <span class="chip file">part-0002.parquet</span>
+            <span class="chip file">…874 small files</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- right: operation rail -->
+      <div class="ops-rail">
+        <div class="op ingest">
+          <div class="ot">📥 Ingestion</div>
+          <div class="od">Writes new Parquet files <em>and</em> commits a new snapshot + manifest entry describing them.</div>
+          <span class="where both">writes BOTH layers</span>
+        </div>
+        <div class="op query">
+          <div class="ot">🔎 Query planning</div>
+          <div class="od">Reads manifests to prune by partition value &amp; column stats, then opens only the surviving data files.</div>
+          <span class="where read">reads METADATA → physical</span>
+        </div>
+        <div class="op compact">
+          <div class="ot">🗜️ Compaction agent</div>
+          <div class="od">Rewrites many small Parquet files into fewer large ones, then commits a new snapshot pointing at them.</div>
+          <span class="where both">rewrites BOTH layers</span>
+        </div>
+        <div class="op partition">
+          <div class="ot">🗂️ Partition agent</div>
+          <div class="od">Evolves the partition spec in table metadata — a pure metadata change that re-groups how future files are pruned. No data is moved.</div>
+          <span class="where metaonly">METADATA only</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout reveal" style="margin-top:30px">
+      <div class="eyebrow">The short answer for the professor</div>
+      <p><b>Both — but never the raw bytes directly.</b> Our agents observe statistics that live entirely
+      in the <b>metadata layer</b> (file count, pruning ratio, partition skew, column stats) and issue
+      Iceberg maintenance <em>operations</em>. <b>Compaction</b> is a physical-data rewrite that is then
+      committed to metadata; <b>partitioning</b> is a purely logical metadata-layer change. Neither
+      bypasses the transaction log — every action is an atomic, auditable snapshot commit.</p>
+    </div>
+
+    <!-- query planner struggle -->
+    <div class="grid grid-2 reveal" style="margin-top:46px;align-items:stretch">
+      <div class="chart-card">
+        <h3>The planner's cost scales with file count</h3>
+        <p class="sub">Real run data — every point is one query step. As metadata accumulates manifest entries for hundreds of tiny files, planning + scan latency climbs with it.</p>
+        <div class="chart-box tall"><canvas id="chart-planner-scatter"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>File pruning — partition alignment in action</h3>
+        <p class="sub">100 data files. Toggle the partition strategy to see how many files a <span class="cell-code">TIME_RANGE</span> query must actually scan (red) versus skip (faded).</p>
+        <div class="prune-toolbar" id="prune-toolbar"></div>
+        <div class="tile-grid" id="tile-grid"></div>
+        <div class="prune-readout" id="prune-readout"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ ENVIRONMENT ════════════════ -->
+<section id="environment" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow light">The Environment</div>
+      <h2>LakeGym v5 — a real Iceberg table as a gym</h2>
+      <p>
+        Each discrete step (i) ingests a batch of rows into a real Apache Iceberg table on Spark,
+        (ii) lets the active policy take one of eight actions, (iii) draws and executes a query from
+        the current workload profile, (iv) computes three reward signals, and (v) builds the next
+        observation vector.
+      </p>
+    </div>
+
+    <div class="logo-strip reveal" style="margin-bottom:30px">
+      <span class="label">Powered by</span>
+      <div class="logos">
+        <img src="assets/logos/spark.png" class="tall" alt="Apache Spark">
+        <img src="assets/logos/iceberg.svg" alt="Apache Iceberg">
+      </div>
+    </div>
+
+    <div class="grid grid-2 reveal" style="margin-bottom:30px">
+      <div class="card">
+        <h3>Table schema &amp; physics</h3>
+        <p style="margin-bottom:14px">An 8-column events table: <span class="cell-code">device_id, timestamp,
+        temperature, humidity, region, event_type, sensor_value, payload</span>. Each row ≈ 200 bytes;
+        the target file size of 64&nbsp;KB ≈ 50 rows per Parquet file.</p>
+        <dl class="kv">
+          <dt>columns</dt><dd>8 (mixed string / double / timestamp)</dd>
+          <dt>row size</dt><dd>≈ 200 bytes</dd>
+          <dt>backend</dt><dd>PySpark + Apache Iceberg in Docker</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h3>Observation space (oₜ)</h3>
+        <p style="margin-bottom:8px">A window of per-step feature vectors capturing the table's current health and recent workload:</p>
+        <p style="font-size:.9rem;color:#AEC1C7">file count · block utilisation · rows ingested · pruning ratio
+        <span class="cell-code">pₜ</span> · running-average pruning <span class="cell-code">p̄ₜ</span> ·
+        partition skew · query latency · 5 query-type history fractions ·
+        steps-since-compaction <span class="cell-code">δ_c</span> · steps-since-partition <span class="cell-code">δ_p</span>.</p>
+      </div>
+    </div>
+
+    <!-- action space + workload tabs -->
+    <div class="reveal">
+      <div class="tabs" data-tabs="env">
+        <button class="tab-btn active" data-tab="actions">Action space</button>
+        <button class="tab-btn" data-tab="workload">Workload plan</button>
+        <button class="tab-btn" data-tab="profiles">Query profiles</button>
+        <button class="tab-btn" data-tab="pruning">Pruning matrix</button>
+        <button class="tab-btn" data-tab="reward">Reward function</button>
+      </div>
+
+      <div class="tab-panel active" data-panel="actions">
+        <div class="grid grid-2" style="align-items:start">
+          <div class="table-wrap" style="color:var(--ink)">
+            <table id="tbl-actions"><thead><tr><th>Action</th><th>Type</th><th class="num">Norm. cost</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="card">
+            <h3>Eight discrete actions</h3>
+            <p>The joint action space combines three compaction targets, four partition operations, and a
+            no-op. Each action carries a normalised cost used by the reward function — partitioning is the
+            most expensive operation (2.0), <span class="cell-code">REMOVE_PARTITION</span> the cheapest
+            structural change (0.7), and <span class="cell-code">NOOP</span> is free.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="workload">
+        <div class="grid grid-2" style="align-items:center">
+          <div class="card" style="color:var(--ink)">
+            <h3>A structured, phase-shifting workload</h3>
+            <p>The v5 standard workload runs 1,000 steps split into five equal query-profile phases
+            (time → region → mixed → type → scan heavy). Ingestion follows six phases: a warm-up, normal
+            load, a <b>burst to 225 rows/step</b> (steps 301–500), recovery, a second normal load, and a
+            wind-down. The v5 <em>eval</em> workload is a 2× compressed 500-step version for
+            multi-episode consistency tests.</p>
+            <div style="margin-top:14px">
+              <span class="tag">warm-up</span> <span class="tag">normal</span>
+              <span class="tag rl">burst 225</span> <span class="tag">recovery</span>
+              <span class="tag">normal-2</span> <span class="tag">wind-down</span>
+            </div>
+          </div>
+          <div class="figure" data-full="assets/figures/ingestion_schedule.png">
+            <img src="assets/figures/ingestion_schedule.png" alt="Ingestion rate schedule">
+            <div class="cap"><b>Ingestion rate schedule</b><span>Rows per step across both workload plans; the burst phase peaks at 225 rows/step.</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="profiles">
+        <div class="table-wrap" style="color:var(--ink)">
+          <table id="tbl-profiles"><thead><tr><th>Profile</th></tr></thead><tbody></tbody></table>
+        </div>
+        <p style="font-size:.9rem;color:#AEC1C7;margin-top:12px">Each profile sets the sampling probability of the five query templates. The dominant query type in each focused profile is highlighted — this is what the partition agent must detect and align to.</p>
+      </div>
+
+      <div class="tab-panel" data-panel="pruning">
+        <div class="grid grid-2" style="align-items:center">
+          <div style="color:var(--ink);background:#fff;border-radius:var(--radius);padding:24px;border:1px solid var(--line)">
+            <div id="heatmap"></div>
+          </div>
+          <div class="card" style="color:var(--ink)">
+            <h3>Why alignment matters</h3>
+            <p>File pruning at query time depends entirely on whether the partition strategy matches the
+            query predicate. <span class="cell-code">TIME_RANGE</span> queries skip <b>92%</b> of files
+            under hourly partitioning — but the same layout prunes nothing for region or type filters.
+            <span class="cell-code">FULL_SCAN</span> is irreducible at 0% under every strategy. Only
+            semantically-aligned pairs achieve non-zero pruning.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-panel="reward">
+        <div class="grid grid-2" style="align-items:start">
+          <div style="color:var(--ink)">
+            <div class="formula"><span class="lhs">r_c</span> = −<span class="w">w_f</span>·f̃ + <span class="w">w_u</span>·u − <span class="w">w_c</span>·ãc + <span class="w">w_τ</span>·τ(a,r)<br><span class="cmt"># compaction: w_f=.25 w_u=.20 w_c=.10 w_τ=.45</span></div>
+            <div class="formula"><span class="lhs">r_p</span> = <span class="w">w_p</span>·p + <span class="w">w_Δp</span>·Δp − <span class="w">w_s</span>·s̃ − <span class="w">w_cp</span>·ãp<br><span class="cmt"># partition: w_p=.55 w_Δp=.25 w_s=.10 w_cp=.10</span></div>
+            <div class="formula"><span class="lhs">r_g</span> = −<span class="w">w_ℓ</span>·ℓ̃ − <span class="w">w_f</span>·f̃ + <span class="w">w_p</span>·p + <span class="w">w_u</span>·u<br><span class="cmt"># global: w_ℓ=.30 w_f=.20 w_p=.30 w_u=.20</span></div>
+          </div>
+          <div class="card" style="color:var(--ink)">
+            <h3>Three reward signals</h3>
+            <p>Two specialist signals provide focused training gradients — <b>compact reward</b> rewards
+            consolidating files toward the target size, <b>partition reward</b> rewards improved pruning.
+            The <b>global reward</b> (latency + file count + pruning + utilisation, with
+            L_max = 15,000 ms) is the primary optimisation target and the metric all 22 policies are
+            ranked on.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ EXPERIMENT DESIGN ════════════════ -->
+<section id="experiment">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Experiment Design</div>
+      <h2>How every policy was measured</h2>
+      <p>Three evaluation protocols, 22 policies, and a cost model that projects every step onto cloud pricing.</p>
+    </div>
+
+    <div class="grid grid-3 reveal" style="margin-bottom:40px">
+      <div class="card hover">
+        <div class="ico">📏</div>
+        <h3>Standard evaluation</h3>
+        <p>All policies run on the 1,000-step v5 standard workload. RL agents use frozen final-checkpoint
+        weights; heuristic rewards are recomputed post-hoc with the v5 reward function to ensure a fair
+        comparison.</p>
+      </div>
+      <div class="card hover">
+        <div class="ico">🔁</div>
+        <h3>Multi-episode consistency</h3>
+        <p>Each RL agent runs five independent 500-step episodes on the compressed eval workload. The
+        coefficient of variation (CV) across episodes quantifies run-to-run reliability —
+        <span class="cell-code">n = 5,000</span> step-level observations per agent.</p>
+      </div>
+      <div class="card hover">
+        <div class="ico">🧠</div>
+        <h3>Adaptive evaluation</h3>
+        <p>Starting from the frozen checkpoint, weights are updated online each step (PPO for the
+        actor-critics, online DQN for the value agent). Episode 1 uses the checkpoint; later episodes
+        continue from the updated weights.</p>
+      </div>
+    </div>
+
+    <div class="split reveal">
+      <div>
+        <h3 style="font-size:1.35rem;margin-bottom:12px">The 22-policy field</h3>
+        <ul class="lead-list">
+          <li><span class="dot">14</span><div><b>Heuristic compaction policies</b> — always-compact (C32/C64/C128), periodic (every 5 or 10 steps), threshold-triggered, random, and adaptive-frequency compaction.</div></li>
+          <li><span class="dot">3</span><div><b>Workload-aware heuristics</b> — WorkloadAwareThreshold, PartitionExploration, and Random_Partition.</div></li>
+          <li><span class="dot">2</span><div><b>Ablations</b> — CompactOnly and PartitionOnly: the AttentivePPO architecture restricted to a single action sub-space.</div></li>
+          <li><span class="dot">3</span><div><b>Full multi-agent RL systems</b> — AttentivePPO, MLP-PPO, and DDQN.</div></li>
+        </ul>
+      </div>
+      <div class="callout navy">
+        <div class="eyebrow">Cost model</div>
+        <p style="margin-bottom:10px"><b>C = C_q·Σℓ + C_c·N_c + C_s·Σσ</b></p>
+        <p>Query at <b>$0.01 / 1,000 ms</b>, compaction at <b>$0.005 / operation</b>, storage at
+        <b>$0.000001 / KB-step</b>. RL compaction counts are averaged over five independent episodes so a
+        single lucky run can't skew the totals. Savings are reported relative to the no-maintenance
+        baseline ($49.86 / episode).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ SIMULATION WORKFLOW ════════════════ -->
+<section id="workflow" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow light">Simulation Workflow</div>
+      <h2>What happens in a single step</h2>
+      <p>The five-stage loop that repeats for every one of the 1,000 steps in an episode.</p>
+    </div>
+    <div class="grid grid-4 reveal">
+      <div class="card hover"><div class="ico" style="background:#23414b">①</div><h3>Ingest</h3><p>A batch of rows (20–300, per the ingestion schedule) is appended to the live Iceberg table, creating new Parquet files.</p></div>
+      <div class="card hover"><div class="ico" style="background:#23414b">②</div><h3>Act</h3><p>The meta-controller scores urgency and delegates; the chosen specialist selects one of eight actions and Spark executes it.</p></div>
+      <div class="card hover"><div class="ico" style="background:#23414b">③</div><h3>Query</h3><p>A query is sampled from the current workload profile and run against the table; latency and pruning are measured.</p></div>
+      <div class="card hover"><div class="ico" style="background:#23414b">④</div><h3>Reward</h3><p>Compact, partition, and global rewards are computed from the resulting table state and query cost.</p></div>
+    </div>
+    <div class="grid reveal" style="margin-top:22px;grid-template-columns:1fr">
+      <div class="card hover" style="display:flex;gap:18px;align-items:center">
+        <div class="ico" style="background:#23414b;margin:0">⑤</div>
+        <div><h3 style="margin-bottom:4px">Observe &amp; log</h3><p>The next observation vector is constructed and the full transition — step, action, latency, file count, reward — is written to a CSV in <span class="cell-code">LakeGymLite/results/</span> for offline analysis in the research notebook.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ TRAINING & DATA COLLECTION ════════════════ -->
+<section id="training">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Training &amp; Data Collection</div>
+      <h2>How the agents learn — and from what data</h2>
+      <p>
+        The six specialists (three architectures × two roles) are <b>each trained differently</b>, but
+        all follow the same shape: an <b>offline</b> pre-training phase that learns from static logs,
+        then a <b>benchmark</b> phase that tests those weights on a <em>different, unseen</em> 500-step
+        workload — once with weights frozen, once allowing them to adapt online. Every step is a
+        <span class="cell-code">(state, action, reward, next-state, done)</span> transition tuple. The
+        meta-controller is rule-based and never trained.
+      </p>
+    </div>
+
+    <!-- three-stage pipeline -->
+    <div class="pipeline reveal" style="margin-bottom:40px">
+      <div class="stage s1">
+        <div class="snum">STAGE 1</div>
+        <h4>Collect</h4>
+        <p>Heuristic &amp; baseline policies are run in the simulator, logging every step as a transition row into 42-column CSVs.</p>
+        <span class="out">→ transition logs (≈6,000 steps)</span>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="stage s2">
+        <div class="snum">STAGE 2 · OFFLINE</div>
+        <h4>Pre-train (AWR)</h4>
+        <p>Each specialist learns a policy from the <em>static</em> logs via Advantage-Weighted Regression — no environment interaction.</p>
+        <span class="out">→ offline_*_agent.weights.h5</span>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="stage s3">
+        <div class="snum">STAGE 3 · BENCHMARK</div>
+        <h4>Test on a new workload</h4>
+        <p>The offline weights are evaluated on a different, unseen 500-step workload — once <b>frozen</b>, once <b>adapting</b> online.</p>
+        <span class="out">→ frozen vs adaptive results</span>
+      </div>
+    </div>
+
+    <!-- transition tuple -->
+    <div class="card reveal" style="margin-bottom:40px">
+      <div class="eyebrow">One logged transition = one training example</div>
+      <div class="tuple" style="margin-top:16px">
+        <div class="tuple-part state">
+          <div class="tt">state &nbsp;sₜ</div>
+          <div class="tv">Observation vector</div>
+          <div class="tsub">file count · latency · utilisation · pruning · query history · steps-since…</div>
+        </div>
+        <div class="tuple-arrow">→</div>
+        <div class="tuple-part action">
+          <div class="tt">action &nbsp;aₜ</div>
+          <div class="tv">1 of 8</div>
+          <div class="tsub">NOOP / compact / partition</div>
+        </div>
+        <div class="tuple-arrow">→</div>
+        <div class="tuple-part reward">
+          <div class="tt">reward &nbsp;rₜ</div>
+          <div class="tv">3 signals</div>
+          <div class="tsub">compact · partition · global</div>
+        </div>
+        <div class="tuple-arrow">→</div>
+        <div class="tuple-part next">
+          <div class="tt">next state &nbsp;sₜ₊₁</div>
+          <div class="tv">next_* columns</div>
+          <div class="tsub">the same features, one step later — used to bootstrap value targets</div>
+        </div>
+        <div class="tuple-arrow">·</div>
+        <div class="tuple-part done">
+          <div class="tt">done</div>
+          <div class="tv">0 / 1</div>
+        </div>
+      </div>
+      <p style="color:var(--ink-2);font-size:.92rem;margin-top:18px;max-width:80ch">
+        Columns 9–25 hold the current observation, column 3 the action, columns 5–7 the three reward
+        signals, and columns 26–42 the <span class="cell-code">next_*</span> observation. A 1,000-step
+        episode therefore produces 1,000 training tuples; the five-episode evaluations yield 5,000.
+      </p>
+    </div>
+
+    <!-- per-agent features -->
+    <div class="reveal" style="margin-bottom:40px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">What each agent actually sees</h3>
+      <p style="color:var(--ink-2);max-width:74ch;margin-bottom:20px">Each specialist receives a different feature subset, individually normalised so every signal lands in a comparable range before it reaches the network.</p>
+      <div class="tabs" data-tabs="feat">
+        <button class="tab-btn active" data-tab="fc">Compaction agent · 8 features</button>
+        <button class="tab-btn" data-tab="fp">Partition agent · 14 features</button>
+      </div>
+      <div class="tab-panel active" data-panel="fc">
+        <div class="grid grid-2" style="align-items:start">
+          <div class="table-wrap">
+            <table id="tbl-feat-c"><thead><tr><th>#</th><th>Feature</th><th>Normalisation</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="card">
+            <h3>Tuned for the small-file signal</h3>
+            <p>The compaction agent watches file count, block utilisation, total size, file-size skew and
+            time-since-last-compaction. <span class="cell-code">steps_since_compact</span> uses an
+            exponential decay <span class="cell-code">exp(−x/10)</span> so recent compactions strongly
+            suppress the urge to act again — mirroring the meta-controller's 4-step cooldown.</p>
+          </div>
+        </div>
+      </div>
+      <div class="tab-panel" data-panel="fp">
+        <div class="grid grid-2" style="align-items:start">
+          <div class="table-wrap">
+            <table id="tbl-feat-p"><thead><tr><th>#</th><th>Feature</th><th>Normalisation</th></tr></thead><tbody></tbody></table>
+          </div>
+          <div class="card">
+            <h3>Tuned for workload alignment</h3>
+            <p>The partition agent's defining inputs are the <b>five query-history fractions</b> and the
+            <b>pruning ratios</b> — exactly the signals needed to tell whether the current layout matches
+            the live workload. The current <span class="cell-code">partition_strategy</span> is one-hot
+            encoded, expanding 11 raw fields to a 14-dim vector.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- offline pre-training, per architecture -->
+    <div class="reveal" style="margin-bottom:40px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">Stage 2 · Offline pre-training — per architecture</h3>
+      <p style="color:var(--ink-2);max-width:80ch;margin-bottom:20px">
+        Each architecture is pre-trained from the <em>static</em> logs with its <b>own</b> offline
+        method — and no two are alike: AttentivePPO uses advantage-weighted regression, MLP-PPO uses a
+        clipped-PPO surrogate, and DDQN uses offline Double-DQN over a replay buffer. All are confirmed
+        from the training notebooks; the only inferred piece is the DDQN <em>compaction</em> role, taken
+        to mirror its partition sibling.
+      </p>
+      <div class="tabs" data-tabs="offarch">
+        <button class="tab-btn active" data-tab="oa">AttentivePPO · AWR</button>
+        <button class="tab-btn" data-tab="om">MLP-PPO · clipped-PPO</button>
+        <button class="tab-btn" data-tab="od">DDQN · Double-DQN</button>
+      </div>
+
+      <!-- AttentivePPO (final) -->
+      <div class="tab-panel active" data-panel="oa">
+        <div style="margin-bottom:16px"><span class="status final"><span class="pulse"></span> Final · from notebooks</span></div>
+        <div class="grid grid-2" style="align-items:start">
+          <div class="card">
+            <h3>Advantage-Weighted Regression</h3>
+            <p style="margin-bottom:6px" id="blurb-oa"></p>
+            <dl class="kv" id="cfg-off-attentive" style="margin-top:14px"></dl>
+          </div>
+          <div class="card">
+            <h3>Reward shaping · partition specialist</h3>
+            <p style="margin-bottom:14px">Offline targets blend three signals so the agent learns
+            <em>workload alignment</em>, not just raw outcomes — e.g. a <span class="cell-code">time_heavy</span>
+            phase should map to <span class="cell-code">HOUR</span> partitioning:</p>
+            <div class="table-wrap">
+              <table id="tbl-offline-reward"><thead><tr><th>Signal</th><th class="num">Weight</th><th>Captures</th></tr></thead><tbody></tbody></table>
+            </div>
+            <p style="margin-top:12px;font-size:.86rem;color:var(--ink-3)">Balanced per-action sampling counters the heavy NOOP skew in the logs, so rare partition actions still receive gradient.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MLP-PPO (final) -->
+      <div class="tab-panel" data-panel="om">
+        <div style="margin-bottom:16px"><span class="status final"><span class="pulse"></span> Final · from notebooks</span></div>
+        <div class="grid grid-2" style="align-items:start">
+          <div class="card">
+            <h3>Offline clipped-PPO</h3>
+            <p style="margin-bottom:6px" id="blurb-om"></p>
+            <dl class="kv" id="cfg-off-mlp" style="margin-top:14px"></dl>
+          </div>
+          <div class="card">
+            <h3>How it differs from AttentivePPO</h3>
+            <p>Same on-policy PPO <em>family</em>, but two differences. The policy is a flattened MLP rather
+            than an attention encoder, and the offline objective is the <b>clipped surrogate</b> with
+            standardized advantages — instead of AttentivePPO's exponential AWR weighting. Both compaction
+            (8 features / 4 actions / W=10) and partition (14 features / 5 actions / W=20) roles use the
+            identical settings shown here.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- DDQN (final, compaction inferred) -->
+      <div class="tab-panel" data-panel="od">
+        <div style="margin-bottom:16px"><span class="status final"><span class="pulse"></span> Final · partition confirmed</span></div>
+        <div class="grid grid-2" style="align-items:start">
+          <div class="card">
+            <h3>Offline Double-DQN</h3>
+            <p style="margin-bottom:6px" id="blurb-od"></p>
+            <dl class="kv" id="cfg-off-ddqn" style="margin-top:14px"></dl>
+          </div>
+          <div class="card">
+            <h3>Value-based, not policy-gradient</h3>
+            <p>Structurally distinct from the two PPO agents: a <b>dueling</b> network splits value V(s) and
+            advantage A(s,a), and learning is off-policy from a replay buffer seeded with the logs, using a
+            <b>Double-DQN</b> target to curb Q-value over-estimation.</p>
+            <div class="prelim-banner" id="ddqn-note"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- benchmark -->
+    <div class="reveal">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">Stage 3 · Benchmarking on an unseen workload</h3>
+      <p style="color:var(--ink-2);max-width:80ch;margin-bottom:20px">
+        This stage is <b>not</b> further fine-tuning toward a deployment policy — it is a generalisation
+        test. The pre-trained agents are dropped into a <b>different, compressed 500-step workload</b>
+        (5 independent episodes) whose phase pattern they never saw during offline training, and evaluated
+        in two modes. Each specialist still acts on its own reward; <span class="cell-code">global_reward</span>
+        is the headline metric all 22 policies are ranked on.
+      </p>
+      <div class="modes" style="margin-bottom:26px">
+        <div class="mode frozen">
+          <div class="mh"><span class="pin">🧊</span><div><h4>Frozen</h4><p>Weights held fixed for the whole test.</p></div></div>
+          <p>Measures <b>out-of-the-box generalisation</b> — how well the offline policy transfers to a workload it was never trained on. Source of the consistency results (reward/latency CV across episodes).</p>
+          <div class="tagrow"><span class="tag">5 × 500 steps</span><span class="tag">CV reliability</span></div>
+        </div>
+        <div class="mode adaptive">
+          <div class="mh"><span class="pin">🔥</span><div><h4>Adaptive</h4><p>Weights keep updating online during the test.</p></div></div>
+          <p>Measures <b>real-time adaptation</b> to the new distribution. The per-step update rules are below. This is where AttentivePPO climbs +20.3% while DDQN destabilises −22.2%.</p>
+          <div class="tagrow"><span class="tag">episode-over-episode</span><span class="tag rl">frozen vs adaptive</span></div>
+        </div>
+      </div>
+      <div class="figure" data-full="assets/figures/frozen_vs_adaptive.png" style="margin-bottom:26px;cursor:zoom-in">
+        <img src="assets/figures/frozen_vs_adaptive.png" alt="Frozen vs adaptive per-episode comparison">
+        <div class="cap"><b>Frozen vs. adaptive — per-episode reward</b><span>The two test modes side by side for all three agents across the five 500-step evaluation episodes. Full adaptive trajectories are in the Results section.</span></div>
+      </div>
+      <h4 style="font-size:1.05rem;margin-bottom:6px">Per-step update rules used in adaptive mode</h4>
+      <p style="color:var(--ink-2);max-width:78ch;margin-bottom:18px">In adaptive mode only, the two PPO architectures update on-policy from fresh rollouts; the DDQN updates off-policy from a replay buffer — the structural difference that explains their opposite adaptation behaviour.</p>
+      <div class="train-flow" style="margin-bottom:26px">
+        <div class="tf"><div class="n">01</div><h4>Roll out</h4><p>The agent acts in the live simulator; each step logs a transition tuple.</p></div>
+        <div class="sep">→</div>
+        <div class="tf"><div class="n">02</div><h4>Extract features</h4><p>Per-agent feature subset is sliced from the obs and normalised.</p></div>
+        <div class="sep">→</div>
+        <div class="tf"><div class="n">03</div><h4>Compute targets</h4><p>PPO: GAE advantages from the specialist reward. DQN: Bellman targets via the target network.</p></div>
+        <div class="sep">→</div>
+        <div class="tf"><div class="n">04</div><h4>Update</h4><p>Clipped policy-gradient (PPO) or Q-regression (DQN) over minibatches.</p></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 style="display:flex;align-items:center;gap:9px"><span class="dot-a"></span><span class="dot-m"></span> PPO — AttentivePPO &amp; MLP-PPO</h3>
+          <dl class="kv" id="cfg-ppo" style="margin-top:14px"></dl>
+        </div>
+        <div class="card">
+          <h3 style="display:flex;align-items:center;gap:9px"><span class="dot-d"></span> DDQN</h3>
+          <dl class="kv" id="cfg-dqn" style="margin-top:14px"></dl>
+        </div>
+      </div>
+      <div class="callout reveal" style="margin-top:26px">
+        <div class="eyebrow">Why this matters for the results</div>
+        <p>This is the root of the adaptive-learning finding: PPO's <b>on-policy</b> rollouts always reflect
+        the current policy, so online updates stay stable (AttentivePPO +20.3%). DDQN's <b>replay buffer</b>
+        mixes in stale transitions — once over-compaction enters the buffer it reinforces itself, which is
+        why DDQN destabilises under online adaptation (−22.2%) and is best deployed frozen.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ RESULTS ════════════════ -->
+<section id="results">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Results</div>
+      <h2>What the data shows</h2>
+      <p>Every chart below is rendered from the metrics in the paper's tables; the static figures are the
+      exact plots generated by the research notebook. Hover any chart to inspect values.</p>
+    </div>
+
+    <!-- 1. Overall ranking -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">1 · The RL agents sweep the top three spots</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">All three hierarchical agents outrank every one of the 17 heuristic and workload-aware baselines on mean global reward. AttentivePPO leads at 0.2201 — a +17.8% gain over the best pure-compaction heuristic — while no-maintenance and partition-only collapse into deeply negative territory.</p>
+      <div class="table-wrap">
+        <table id="tbl-ranking"><thead><tr><th>Rank</th><th>Policy</th><th class="num">Reward</th><th class="num">Latency (ms)</th><th class="num">Files</th><th class="num">Pruning</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <!-- 2. reward decomposition + cumulative race -->
+    <div class="grid grid-2 reveal" style="margin-bottom:42px">
+      <div class="chart-card">
+        <h3>Reward decomposition</h3>
+        <p class="sub">Only the three RL agents achieve a positive partition reward — heuristics never change the layout.</p>
+        <div class="chart-box tall"><canvas id="chart-decomp"></canvas></div>
+      </div>
+      <div class="figure" data-full="assets/figures/cumulative_reward_race.png">
+        <img src="assets/figures/cumulative_reward_race.png" alt="Cumulative reward race over 1000 steps">
+        <div class="cap"><b>Cumulative reward race (1,000 steps)</b><span>The RL ensemble diverges sharply upward from all baselines during the burst window (steps 301–500). Final reward: AttentivePPO 220.1 vs best heuristic 141.1.</span></div>
+      </div>
+    </div>
+
+    <!-- 3. three-way comparison -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">2 · No single architecture dominates</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">Normalised across four metrics, AttentivePPO leads on reward and file efficiency, DDQN on latency, and MLP-PPO on pruning ratio. Each architecture has a distinct operational sweet spot.</p>
+      <div class="grid grid-2">
+        <div class="chart-card">
+          <h3>Normalised four-metric profile</h3>
+          <p class="sub">Each metric scaled to [0,1] within the three-agent cohort — higher is always better.</p>
+          <div class="chart-box tall"><canvas id="chart-radar"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Mean global reward (±s.d.)</h3>
+          <p class="sub">Five-episode averaged step-level reward, n = 5,000 per agent.</p>
+          <div class="chart-box tall"><canvas id="chart-threeway"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- figure gallery: dynamics + actions -->
+    <div class="grid grid-2 reveal" style="margin-bottom:42px">
+      <div class="figure" data-full="assets/figures/frozen_dynamics.png">
+        <img src="assets/figures/frozen_dynamics.png" alt="Frozen agents step-by-step dynamics">
+        <div class="cap"><b>Step-by-step dynamics</b><span>Global reward, latency, file count, and pruning ratio over the full 1,000-step workload for all three frozen agents.</span></div>
+      </div>
+      <div class="figure" data-full="assets/figures/rl_vs_baselines_profile.png">
+        <img src="assets/figures/rl_vs_baselines_profile.png" alt="RL agents vs baselines four-metric profile">
+        <div class="cap"><b>RL vs baselines — four metrics</b><span>The RL agents (starred) uniformly top the reward ranking while staying competitive on latency and file count. PartitionOnly is an extreme outlier.</span></div>
+      </div>
+    </div>
+
+    <!-- 4. action distribution + target size -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">3 · The agents learned to mostly do nothing — wisely</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">All three agents stay idle in 76–79% of steps: selective intervention is a robust learned property. When they do act, AttentivePPO favours large 128&nbsp;KB compactions and issues the most partition actions; MLP-PPO concentrates almost entirely on 64&nbsp;KB.</p>
+      <div class="grid grid-2">
+        <div class="chart-card">
+          <h3>Action distribution by agent</h3>
+          <p class="sub">Percentage share of each action, pooled over five 1,000-step episodes.</p>
+          <div class="chart-box tall"><canvas id="chart-actions"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Compaction target-size sensitivity</h3>
+          <p class="sub">Always-compact at three target sizes. 128&nbsp;KB is best; 32&nbsp;KB over-compacts catastrophically.</p>
+          <div class="chart-box tall"><canvas id="chart-target"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. adaptive learning -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">4 · Online adaptation is architecture-dependent</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">On the unseen 500-step benchmark, the <em>adaptive</em> mode lets weights keep updating. AttentivePPO climbs +20.3% and eventually <em>exceeds</em> its own frozen ceiling. DDQN, by contrast, degrades −22.2% as its replay buffer reinforces over-compaction — a clear on-policy-vs-off-policy constraint. (See <a href="#training" style="color:var(--red);font-weight:600">Training → Stage 3</a> for the frozen vs. adaptive setup.)</p>
+      <div class="grid grid-2">
+        <div class="chart-card">
+          <h3>Adaptive reward per episode</h3>
+          <p class="sub">Mean global reward across five 500-step episodes; dashed lines mark each agent's frozen ceiling.</p>
+          <div class="chart-box tall"><canvas id="chart-adaptive"></canvas></div>
+        </div>
+        <div class="figure" data-full="assets/figures/learning_curve.png">
+          <img src="assets/figures/learning_curve.png" alt="Adaptive agents learning curve">
+          <div class="cap"><b>Learning-curve convergence</b><span>Episode-mean reward with frozen-ceiling reference lines. AttentivePPO converges upward; DDQN collapses by episode 5.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. ablation + cost -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">5 · Joint control &amp; the bottom line</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">Ablations confirm a synergy that neither sub-agent achieves alone: the full system beats CompactOnly by +25–30% and PartitionOnly by +220–225%. Compaction is a prerequisite for effective partitioning. Projected to cloud pricing, the RL agents cut total cost by 81–83%.</p>
+      <div class="grid grid-2">
+        <div class="chart-card">
+          <h3>Estimated cloud cost per episode</h3>
+          <p class="sub">Stacked query + compaction + storage cost. RL agents cluster at the bottom near $8.5–9.3.</p>
+          <div class="chart-box tall"><canvas id="chart-cost"></canvas></div>
+        </div>
+        <div class="figure" data-full="assets/figures/ablation_study.png">
+          <img src="assets/figures/ablation_study.png" alt="Ablation study">
+          <div class="cap"><b>Ablation — joint vs isolated control</b><span>CompactOnly and PartitionOnly single-agent systems against the three full multi-agent RL systems. The gains are non-additive.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- consistency table -->
+    <div class="reveal" style="margin-bottom:42px">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">6 · Run-to-run consistency</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">AttentivePPO is the most reliable agent — the tightest coefficient of variation on reward (5.86%), latency (2.33%), and file count (2.40%) across five independent evaluation episodes.</p>
+      <div class="table-wrap">
+        <table id="tbl-consistency"><thead><tr><th>Metric</th><th><span class="dot-a"></span> AttentivePPO</th><th><span class="dot-m"></span> MLP-PPO</th><th><span class="dot-d"></span> DDQN</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <!-- full figure gallery -->
+    <div class="reveal">
+      <h3 style="font-size:1.4rem;margin-bottom:6px">Full notebook figure gallery</h3>
+      <p style="color:var(--ink-2);max-width:72ch;margin-bottom:22px">All publication figures, generated directly from the transition logs. Click any figure to enlarge.</p>
+      <div class="grid grid-3" id="gallery"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ FINDINGS ════════════════ -->
+<section id="findings" class="dark">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow light">Key Findings</div>
+      <h2>Six takeaways</h2>
+    </div>
+    <div class="grid grid-2 reveal" style="gap:32px">
+      <div class="finding"><div class="n">1</div><div><h3>Joint control is essential</h3><p>+224% over partition-only and +29% over compaction-only. A layout optimised for query pruning cannot be sustained without concurrent compaction to prevent file proliferation.</p></div></div>
+      <div class="finding"><div class="n">2</div><div><h3>Attention pays off</h3><p>AttentivePPO beats MLP-PPO by +3.5% reward with lower per-episode variance — its self-attention encoder adapts fastest to non-stationary workload phases.</p></div></div>
+      <div class="finding"><div class="n">3</div><div><h3>Selective intervention emerges</h3><p>Every agent learned to stay idle &gt;76% of the time. Compulsive maintenance is penalised; doing nothing is often the optimal move.</p></div></div>
+      <div class="finding"><div class="n">4</div><div><h3>The agents discovered the right file size</h3><p>Without being told, AttentivePPO gravitated to large compactions — 128&nbsp;KB dominates its compaction actions, the empirically optimal target under bursty ingestion.</p></div></div>
+      <div class="finding"><div class="n">5</div><div><h3>Off-policy ≠ online-safe</h3><p>DDQN's replay buffer destabilises under online adaptation (−22.2%). Frozen weights are preferred for deployment; online tuning should be restricted to on-policy methods.</p></div></div>
+      <div class="finding"><div class="n">6</div><div><h3>Real cost savings</h3><p>Projected to cloud pricing, the RL agents cut total cost 81–83% versus no-maintenance — driven primarily by latency reduction, not just rearranging small files.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ LIMITATIONS ════════════════ -->
+<section id="limitations">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Scope &amp; Future Work</div>
+      <h2>A proof of concept — and what's next</h2>
+      <p>This study is deliberately a proof of concept. The micro-scale lets 1,000-step episodes finish on
+      modest hardware, but the <em>dynamics</em> — pruning math, overhead distributions, ingestion physics —
+      mirror a production lakehouse. The advantages reported here only grow more pronounced at scale.</p>
+    </div>
+    <div class="grid grid-2 reveal">
+      <div class="callout">
+        <b>Current scope</b>
+        <p style="margin-top:8px">A single table schema and five query profiles; a cost model with fixed
+        per-operation prices; training on the v5 workload. Generalisation to substantially different
+        regimes (append-only, deletion-heavy) is untested, and training-time budgets are not yet reported.</p>
+      </div>
+      <div class="callout navy">
+        <b>Where it scales</b>
+        <p style="margin-top:8px">At TB-range storage and real cloud pricing, the latency and cost gaps that
+        already favour the RL agents widen further. Next steps: multiple schemas, learned (rather than
+        rule-based) meta-control, and richer workload generalisation.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ FOOTER ════════════════ -->
+<footer>
+  <div class="wrap">
+    <div>
+      <h4 style="display:flex;align-items:center;gap:10px"><span class="logo" style="display:inline-grid"></span> LakePilot</h4>
+      <p style="max-width:42ch">Hierarchical multi-agent reinforcement learning for autonomous data-lakehouse maintenance. A research prototype built on Apache Iceberg &amp; Spark.</p>
+    </div>
+    <div class="links">
+      <h4>Project</h4>
+      <a href="#problem">The problem</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#results">Results</a>
+      <a href="https://github.com/OmarEssameldinMousa/LakePilot-Research-prototype" target="_blank" rel="noopener">GitHub repository ↗</a>
+    </div>
+    <div class="links">
+      <h4>Authors</h4>
+      <span>Omer Karim</span>
+      <span>Omar Essameldin</span>
+      <span>Omar Shrief</span>
+      <span>Ahmed B. Zaky</span>
+    </div>
+    <div class="legal">
+      Egypt-Japan University of Science and Technology · Benha University. Synthetic data generated by the
+      LakeGym v5 environment. Figures rendered with Matplotlib. © 2026.
+    </div>
+  </div>
+</footer>
+
+<!-- lightbox -->
+<div class="lightbox" id="lightbox"><img id="lightbox-img" src="" alt=""></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
