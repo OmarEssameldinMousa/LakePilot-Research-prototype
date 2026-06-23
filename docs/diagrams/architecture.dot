@@ -1,0 +1,39 @@
+digraph architecture {
+  rankdir=TB;
+  graph [fontname="Helvetica", bgcolor="transparent", splines=ortho, nodesep=0.5, ranksep=0.7];
+  node  [fontname="Helvetica", shape=box, style="rounded,filled", color="#9FB8BF", fillcolor="#F2F7F7", fontcolor="#1B3139", penwidth=1.4, margin="0.18,0.12"];
+  edge  [fontname="Helvetica", color="#5F6F75", fontcolor="#5F6F75", fontsize=10];
+
+  subgraph cluster_env {
+    label="LakeGym v5 Environment (LakeSimulator)";
+    fontname="Helvetica-Bold"; color="#1B3139"; style="rounded"; fontcolor="#1B3139";
+    spark   [label="Apache Spark\n(query + maintenance engine)", fillcolor="#E7F0F9"];
+    iceberg [label="Apache Iceberg table\n(metadata + Parquet files)", fillcolor="#E7F0F9"];
+    scenario[label="ScenarioManager\n(workload phases, ingestion)"];
+    reward  [label="RewardCalculator\n(r_c, r_p, r_g)"];
+  }
+
+  meta [label="MetaController\n(rule-based urgency arbitrator)", fillcolor="#FFF1EE", color="#FF3621", penwidth=2];
+
+  subgraph cluster_agents {
+    label="Specialist RL agents (shared model registry)";
+    fontname="Helvetica-Bold"; color="#17A2A2"; style="rounded"; fontcolor="#0F6F6F";
+    comp [label="CompactionAgent\nactions: NOOP, C32, C64, C128", color="#185FA5", penwidth=1.8];
+    part [label="PartitionAgent\nactions: NOOP, HOUR, REGION,\nEVENT_TYPE, REMOVE", color="#1D9E75", penwidth=1.8];
+    models[label="Neural models\nAttentivePPOModel | MlpPPOModel | DuelingDDQNModel", fillcolor="#EFEFFA", shape=note];
+  }
+
+  iceberg -> spark [style=invis];
+  scenario -> iceberg [label="ingest batch"];
+  iceberg -> meta [label="observation o_t"];
+  meta -> comp [label="delegate (u_c ≥ u_p)"];
+  meta -> part [label="delegate (u_p > u_c)"];
+  comp -> models [style=dashed, arrowhead=none];
+  part -> models [style=dashed, arrowhead=none];
+  comp -> spark [label="action a_t"];
+  part -> spark [label="action a_t"];
+  spark -> reward [label="table state + query latency"];
+  reward -> comp [label="r_c", color="#185FA5"];
+  reward -> part [label="r_p", color="#1D9E75"];
+  reward -> meta [label="r_g (global)", color="#FF3621"];
+}

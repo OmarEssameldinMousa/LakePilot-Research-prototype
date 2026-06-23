@@ -1,0 +1,35 @@
+digraph deployment {
+  rankdir=TB;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.5, ranksep=0.6, compound=true];
+  node  [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#F2F7F7", color="#9FB8BF", fontcolor="#1B3139", fontsize=10, margin="0.16,0.1"];
+  edge  [fontname="Helvetica", color="#5F6F75", fontsize=9];
+
+  subgraph cluster_host {
+    label="Docker host (docker-compose.yml)";
+    fontname="Helvetica-Bold"; color="#1B3139"; style="rounded";
+
+    subgraph cluster_lake {
+      label="lakegym container (LakeGymLite/Dockerfile)";
+      fontname="Helvetica"; color="#17A2A2"; style="rounded"; fontcolor="#0F6F6F";
+      app    [label="experiment.py / run_experiment.py\nMetaController + agents + RL training", fillcolor="#FFF1EE", color="#FF3621"];
+      pyspark[label="PySpark driver\n(local Spark session)", fillcolor="#E7F0F9"];
+      results[label="results/  (transition CSVs)", shape=folder, fillcolor="#EFEFFA"];
+    }
+
+    subgraph cluster_cluster {
+      label="spark-cluster/ (optional multi-node)";
+      fontname="Helvetica"; color="#185FA5"; style="rounded"; fontcolor="#185FA5";
+      master [label="Spark master"];
+      w1     [label="Spark worker 1"];
+      w2     [label="Spark worker 2"];
+    }
+
+    warehouse [label="warehouse/  (Iceberg Parquet + metadata)", shape=cylinder, fillcolor="#E7F0F9"];
+  }
+
+  app -> pyspark [label="submit jobs"];
+  pyspark -> warehouse [label="read/write Iceberg"];
+  app -> results [label="log transitions"];
+  pyspark -> master [label="(cluster mode)", style=dashed];
+  master -> w1; master -> w2;
+}

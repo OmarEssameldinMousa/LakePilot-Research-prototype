@@ -433,19 +433,76 @@ footer .legal { width: 100%; border-top: 1px solid var(--navy-600); margin-top: 
 .dot-d { width:10px;height:10px;border-radius:50%;background:var(--ddqn);display:inline-block; }
 
 /* ───────── Responsive ───────── */
-@media (max-width: 940px) {
+
+/* Small laptop / large tablet — collapse the nav to a menu before the links crowd */
+@media (max-width: 1024px) {
   .nav-links { display: none; }
   .nav-toggle { display: block; }
-  .nav-links.open { display: flex; position: absolute; top: 64px; left: 0; right: 0; flex-direction: column; background: var(--oat); padding: 14px; border-bottom: 1px solid var(--line); gap: 2px; }
-  .grid-2, .grid-3, .grid-4, .split, .arch-detail { grid-template-columns: 1fr; }
+  .nav-links.open {
+    display: flex; position: absolute; top: 64px; left: 0; right: 0;
+    flex-direction: column; background: var(--oat); padding: 14px;
+    border-bottom: 1px solid var(--line); gap: 2px;
+    box-shadow: var(--shadow-lg);
+    max-height: calc(100vh - 64px); overflow-y: auto;
+  }
+  .nav-links.open a { padding: 12px 14px; border-radius: 8px; }
+  .nav-links.open .cta { margin-top: 6px; text-align: center; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .stack { grid-template-columns: 1fr; }
+}
+
+/* Tablet portrait — collapse the multi-column layouts and stacked diagrams */
+@media (max-width: 880px) {
+  .grid-2, .grid-3, .split, .arch-detail { grid-template-columns: 1fr; }
   .hero-stats { grid-template-columns: repeat(2, 1fr); }
   .problem-flow { grid-template-columns: 1fr; }
   .flow-arrow { transform: rotate(90deg); }
   .arch-split { gap: 24px; flex-direction: column; }
   .arch-split::before, .arch-split .leg::before { display: none; }
+  .pipeline { grid-template-columns: 1fr; }
+  .pipe-arrow { transform: rotate(90deg); }
+  .modes { grid-template-columns: 1fr; }
+  .tuple { grid-template-columns: 1fr; }
+  .tuple-arrow { transform: rotate(90deg); }
+  .tuple-part.done { padding: 14px 16px; }
   section { padding: 64px 0; }
+  .hero { padding: 120px 0 70px; }
+  .split { gap: 32px; }
 }
+
+/* Phone — single-column everything, tame fixed widths so nothing overflows */
 @media (max-width: 560px) {
   .hero-stats { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: 1fr; }
   .wrap { padding: 0 20px; }
+  .card { padding: 22px; }
+  .chart-card { padding: 18px; }
+  .chart-box { height: 280px; }
+  .chart-box.tall { height: 320px; }
+
+  /* diagram boxes carry desktop min-widths that overflow narrow screens */
+  .arch-box, .arch-box.env, .spec { min-width: 0; width: 100%; }
+  .arch-box[style*="min-width"] { min-width: 0 !important; }
+  .arch { width: 100%; }
+
+  /* pruning heatmap — shrink cells so the table fits */
+  .heatmap .cell { width: 62px; height: 46px; font-size: .8rem; }
+  .heatmap th { padding: 6px 8px; font-size: .7rem; }
+
+  /* fewer columns so each file tile stays visible */
+  .tile-grid { grid-template-columns: repeat(10, 1fr); }
+
+  .logo-strip { gap: 18px; padding: 18px 20px; }
+  .logo-strip .label { border-right: 0; padding-right: 0; }
+  .logo-strip .logos { gap: 26px; }
+
+  .hero .lead { font-size: 1.08rem; }
+  .hero-actions { gap: 10px; }
+  .btn { width: 100%; justify-content: center; }
+}
+
+/* Very small phones — let wide diagrams scroll instead of overflowing the page */
+@media (max-width: 380px) {
+  .heatmap { display: block; overflow-x: auto; }
+  .formula { font-size: .86rem; padding: 18px; }
 }

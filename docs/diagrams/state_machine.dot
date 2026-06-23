@@ -1,0 +1,21 @@
+digraph states {
+  rankdir=LR;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.4, ranksep=0.6];
+  node  [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#F2F7F7", color="#9FB8BF", fontcolor="#1B3139", fontsize=10, margin="0.14,0.09"];
+  edge  [fontname="Helvetica", color="#5F6F75", fontsize=9];
+
+  start [shape=circle, label="", width=0.2, fillcolor="#1B3139", color="#1B3139"];
+  warm  [label="Warm-up\nsteps 1–100\n~40 rows/step"];
+  norm1 [label="Normal load\nsteps 101–300\n~75 rows/step"];
+  burst [label="Burst\nsteps 301–500\n~225 rows/step", fillcolor="#FFF3DE", color="#EF9F27"];
+  rec   [label="Recovery\nsteps 501–700\n~55 rows/step"];
+  norm2 [label="Normal load 2\nsteps 701–900\n~75 rows/step"];
+  wind  [label="Wind-down\nsteps 901–1000\n~35 rows/step"];
+  done  [shape=doublecircle, label="done", width=0.3, fillcolor="#E7F0F9", color="#185FA5"];
+
+  start -> warm;
+  warm -> norm1 -> burst -> rec -> norm2 -> wind -> done;
+
+  label="Episode lifecycle — query profile shifts every 199 steps (time → region → mixed → type → scan heavy)";
+  labelloc="b"; fontname="Helvetica"; fontsize=10; fontcolor="#5F6F75";
+}

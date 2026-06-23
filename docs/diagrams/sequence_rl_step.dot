@@ -1,0 +1,18 @@
+digraph rlstep {
+  rankdir=TB;
+  graph [fontname="Helvetica", bgcolor="transparent", ranksep=0.45, nodesep=0.6];
+  node  [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#F2F7F7", color="#9FB8BF", fontcolor="#1B3139", margin="0.16,0.1"];
+  edge  [fontname="Helvetica", color="#5F6F75", fontsize=10];
+
+  s0 [label="① Ingest batch of rows into Iceberg table\n(ScenarioManager → new Parquet files)"];
+  s1 [label="② Build observation o_t\n(file count, utilisation, pruning, query history, …)"];
+  s2 [label="③ MetaController.decide(o_t)\ncompute u_c, u_p → delegate or NOOP", fillcolor="#FFF1EE", color="#FF3621"];
+  s3 [label="④ Specialist selects action a_t\nCompactionAgent / PartitionAgent → model(π, V)", fillcolor="#EFEFFA"];
+  s4 [label="⑤ LakeSimulator applies a_t on Spark\n(compaction rewrite / partition-spec change / noop)"];
+  s5 [label="⑥ Sample + run a query from current workload profile\nmeasure latency, pruning ratio"];
+  s6 [label="⑦ RewardCalculator → r_c, r_p, r_g"];
+  s7 [label="⑧ Log transition (s, a, r, s', done) → results CSV\nadvance to o_(t+1)"];
+
+  s0 -> s1 -> s2 -> s3 -> s4 -> s5 -> s6 -> s7;
+  s7 -> s0 [label="next step (×1000 / episode)", style=dashed, constraint=false, color="#17A2A2"];
+}

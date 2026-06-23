@@ -1,0 +1,13 @@
+digraph pipeline {
+  rankdir=LR;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.5, ranksep=0.9];
+  node  [fontname="Helvetica", shape=box, style="rounded,filled", fillcolor="#F2F7F7", color="#9FB8BF", fontcolor="#1B3139", fontsize=10, margin="0.18,0.12"];
+  edge  [fontname="Helvetica", color="#5F6F75", fontsize=9];
+
+  s1 [label="Stage 1 — Collect\nrun heuristic & baseline policies\n→ transition logs (≈6000 steps)"];
+  s2 [label="Stage 2 — Offline pre-train\nAttentivePPO: AWR\nMLP-PPO: clipped-PPO\nDDQN: offline Double-DQN\n→ offline_*_agent.weights.h5", fillcolor="#FFF1EE", color="#FF3621"];
+  s3 [label="Stage 3 — Benchmark\nunseen 500-step workload, 5 episodes\nFrozen vs Adaptive\n→ frozen / adaptive results", fillcolor="#E7F0F9", color="#185FA5"];
+
+  s1 -> s2 [label="static logs"];
+  s2 -> s3 [label="pre-trained weights"];
+}

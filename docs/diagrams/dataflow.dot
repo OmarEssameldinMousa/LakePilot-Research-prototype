@@ -1,0 +1,35 @@
+digraph dfd {
+  rankdir=LR;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.5, ranksep=0.8];
+  node  [fontname="Helvetica", fontcolor="#1B3139", fontsize=10];
+  edge  [fontname="Helvetica", color="#5F6F75", fontsize=9];
+
+  // external entities
+  node [shape=box, style="filled", fillcolor="#E7F0F9", color="#185FA5"];
+  ingest [label="Ingestion\nworkload"];
+  query  [label="Query\nworkload"];
+
+  // processes
+  node [shape=ellipse, style="filled", fillcolor="#F2F7F7", color="#17A2A2"];
+  p1 [label="1.0\nObserve state"];
+  p2 [label="2.0\nArbitrate\n(MetaController)", color="#FF3621"];
+  p3 [label="3.0\nSelect action\n(RL specialist)"];
+  p4 [label="4.0\nApply maintenance\n(Spark/Iceberg)"];
+  p5 [label="5.0\nCompute reward"];
+
+  // data stores
+  node [shape=cylinder, style="filled", fillcolor="#EFEFFA", color="#534AB7"];
+  d1 [label="Iceberg table\n(metadata+Parquet)"];
+  d2 [label="Transition log\n(results CSV)"];
+
+  ingest -> d1 [label="rows"];
+  d1 -> p1 [label="table stats"];
+  p1 -> p2 [label="observation o_t"];
+  p2 -> p3 [label="delegation"];
+  p3 -> p4 [label="action a_t"];
+  p4 -> d1 [label="compaction /\npartition change"];
+  query -> p5 [label="query latency"];
+  d1 -> p5 [label="pruning ratio"];
+  p5 -> d2 [label="(s,a,r,s')"];
+  p5 -> p1 [label="r_g feedback", style=dashed, constraint=false];
+}

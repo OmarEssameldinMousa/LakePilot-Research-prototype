@@ -1,0 +1,31 @@
+digraph classes {
+  rankdir=BT;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.45, ranksep=0.7];
+  node  [fontname="Helvetica", shape=record, style="filled", fillcolor="#F2F7F7", color="#9FB8BF", fontcolor="#1B3139", fontsize=10];
+  edge  [fontname="Helvetica", color="#5F6F75", arrowhead=empty];
+
+  BaseAgent   [label="{BaseAgent|+ model\l+ window_size\l|+ act(obs): Action\l+ remember()\l+ train()\l}"];
+  Compaction  [label="{CompactionAgent|actions: NOOP, C32, C64, C128\l|+ act(obs): Action\l}", color="#185FA5"];
+  Partition   [label="{PartitionAgent|actions: NOOP, HOUR, REGION,\lEVENT_TYPE, REMOVE\l|+ act(obs): Action\l}", color="#1D9E75"];
+
+  BaseModel   [label="{BaseModel (tf.keras.Model)|+ call(x): (π, V)\l}", fillcolor="#EFEFFA"];
+  Attentive   [label="{AttentivePPOModel|self-attention encoder\l4 heads, W=10/20\l}", fillcolor="#EFEFFA"];
+  Mlp         [label="{MlpPPOModel|Dense 256→128\l}", fillcolor="#EFEFFA"];
+  Ddqn        [label="{DuelingDDQNModel|V(s) + A(s,a) streams\l}", fillcolor="#EFEFFA"];
+
+  Meta        [label="{MetaController|+ COMPACT_COOLDOWN=4\l+ PARTITION_COOLDOWN=20\l+ MIN_URGENCY=0.35\l|+ decide(obs): MetaDecision\l+ notify_action(a)\l}", color="#FF3621"];
+  Sim         [label="{LakeSimulator|+ config: SimulationConfig\l+ scenario: ScenarioManager\l+ rewarder: RewardCalculator\l|+ reset(): Observation\l+ step(a): StepResult\l}", color="#17A2A2"];
+  Obs         [label="{Observation|file_count, block_utilization,\lpruning_ratio, query_hist[5],\lsteps_since_compact, …\l}"];
+
+  Compaction -> BaseAgent;
+  Partition  -> BaseAgent;
+  Attentive  -> BaseModel;
+  Mlp        -> BaseModel;
+  Ddqn       -> BaseModel;
+
+  BaseAgent -> BaseModel [arrowhead=vee, style=dashed, label="uses"];
+  Meta -> Compaction [arrowhead=vee, style=dashed, label="delegates"];
+  Meta -> Partition  [arrowhead=vee, style=dashed, label="delegates"];
+  Sim -> Obs [arrowhead=vee, style=dashed, label="emits"];
+  Meta -> Obs [arrowhead=vee, style=dashed, label="reads"];
+}

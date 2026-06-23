@@ -1,0 +1,24 @@
+digraph usecase {
+  rankdir=LR;
+  graph [fontname="Helvetica", bgcolor="transparent", nodesep=0.35, ranksep=1.1];
+  node  [fontname="Helvetica", fontcolor="#1B3139", fontsize=10];
+  edge  [fontname="Helvetica", color="#5F6F75", arrowhead=none];
+
+  actor1 [shape=none, label="Researcher /\nDB Engineer", margin=0];
+  actor2 [shape=none, label="Data\nLakehouse", margin=0];
+
+  node [shape=ellipse, style=filled, fillcolor="#F2F7F7", color="#17A2A2"];
+  u1 [label="Run experiment\n(train / evaluate)"];
+  u2 [label="Configure workload\n& reward weights"];
+  u3 [label="Collect transition\nmetrics (CSV)"];
+  u4 [label="Compare policies\n(RL vs heuristics)"];
+  u5 [label="Autonomously\ncompact small files"];
+  u6 [label="Autonomously\noptimise partitions"];
+  u7 [label="Estimate cloud\ncost savings"];
+
+  actor1 -> u1; actor1 -> u2; actor1 -> u4; actor1 -> u7;
+  u1 -> u3 [style=dashed, label="«include»", fontsize=8, arrowhead=vee];
+  u1 -> u5 [style=dashed, label="«include»", fontsize=8, arrowhead=vee];
+  u1 -> u6 [style=dashed, label="«include»", fontsize=8, arrowhead=vee];
+  u5 -> actor2; u6 -> actor2; u3 -> actor2;
+}
