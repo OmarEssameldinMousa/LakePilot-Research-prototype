@@ -134,6 +134,7 @@ services:
       - ./LakeGymLite/src:/app/src
       - ./LakeGymLite/results:/app/results
       - ./LakeGymLite/trained_models:/app/trained_models
+      - ./revision:/app/revision
     depends_on:
       spark-master:
         condition: service_healthy

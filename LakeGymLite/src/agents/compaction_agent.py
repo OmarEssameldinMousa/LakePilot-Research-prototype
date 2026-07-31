@@ -48,11 +48,16 @@ class CompactionAgent(BaseAgent):
     SKEW_MAX       = 50.0
     DECAY_TAU      = 10.0
 
-    # For z-score normalization (running estimates, updated externally or fixed)
-    _rows_mean: float = 5.0
-    _rows_std: float  = 3.0
-    _rate_mean: float = 10.0
-    _rate_std: float  = 8.0
+    # Fixed z-score constants for rows_ingested / ingestion_rate, calibrated
+    # on the v5 standard workload (empirical mean/std over 7 full episodes).
+    # MUST match the constants used in the offline training notebooks —
+    # training and deployment share these exact values (revision Phase 1).
+    # Previous values (5/3 and 10/8) did not match training-time per-dataset
+    # z-scoring and produced train/serve feature skew.
+    _rows_mean: float = 94.0
+    _rows_std: float  = 71.0
+    _rate_mean: float = 318.0
+    _rate_std: float  = 218.0
 
     def __init__(self, weights_path: Optional[str] = None, model_type: str = "attentive_ppo"):
         super().__init__(

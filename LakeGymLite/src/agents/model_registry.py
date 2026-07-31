@@ -176,28 +176,29 @@ class DuelingDDQNModel(BaseModel):
         self.advantage_fc = tf.keras.layers.Dense(64, activation='relu', name='advantage_fc')
         self.advantage_out = tf.keras.layers.Dense(num_actions, name='advantage_out')
 
-    def call(
-        self, x: tf.Tensor, training: bool = False
-    ) -> Tuple[tf.Tensor, tf.Tensor]:
-        # Shared feature extraction
+    def q_values(self, x: tf.Tensor, training: bool = False) -> tf.Tensor:
+        """Raw dueling Q-values: Q = V + (A - mean(A)). Shape (batch, num_actions)."""
         flat = self.flatten(x)
         h = self.shared_fc1(flat)
         h = self.shared_bn1(h, training=training)
         h = self.shared_fc2(h)
         h = self.shared_bn2(h, training=training)
 
-        # Value stream
         v = self.value_fc(h)
         v = self.value_out(v)  # (batch, 1)
 
-        # Advantage stream
         a = self.advantage_fc(h)
         a = self.advantage_out(a)  # (batch, num_actions)
 
-        # Dueling combination: Q = V + (A - mean(A))
-        q_values = v + (a - tf.reduce_mean(a, axis=-1, keepdims=True))
+        return v + (a - tf.reduce_mean(a, axis=-1, keepdims=True))
 
-        # Convert Q-values to probabilities via softmax (for uniform API)
+    def call(
+        self, x: tf.Tensor, training: bool = False
+    ) -> Tuple[tf.Tensor, tf.Tensor]:
+        q_values = self.q_values(x, training=training)
+
+        # Convert Q-values to probabilities via softmax (for uniform API);
+        # argmax(softmax(Q)) == argmax(Q), so greedy selection is unaffected.
         action_probs = tf.nn.softmax(q_values, axis=-1)
 
         # Value estimate = max Q

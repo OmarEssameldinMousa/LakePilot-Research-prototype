@@ -231,6 +231,7 @@ class OnlineSpecialistTrainer:
             self.target_model.set_weights(self.model.get_weights())
             self.replay_buffer = ReplayBuffer(self.dqn_config.buffer_size)
             self._dqn_step_count = 0
+            self._dqn_env_steps = 0
             self._epsilon = self.dqn_config.epsilon_start
 
     def reset_episode_state(self) -> None:
@@ -411,6 +412,26 @@ class OnlineSpecialistTrainer:
                 metrics[key] /= batches
         return metrics
 
+    @tf.function
+    def _dqn_step_legacy_softmax(self, states, actions, rewards, next_states, dones, gamma):
+        """Original (defective) update kept for reproducibility studies only:
+        regresses softmax(Q) outputs against TD targets on the reward scale."""
+        with tf.GradientTape() as tape:
+            q_probs, _ = self.model(states, training=True)
+            a_onehot = tf.one_hot(actions, depth=self.num_actions)
+            q_selected = tf.reduce_sum(q_probs * a_onehot, axis=-1)
+            next_probs, _ = self.model(next_states, training=False)
+            next_actions = tf.argmax(next_probs, axis=-1)
+            target_probs, _ = self.target_model(next_states, training=False)
+            next_a_onehot = tf.one_hot(next_actions, depth=self.num_actions)
+            target_q_next = tf.reduce_sum(target_probs * next_a_onehot, axis=-1)
+            targets = rewards + gamma * target_q_next * (1.0 - dones)
+            loss = tf.reduce_mean(tf.square(targets - q_selected))
+        grads = tape.gradient(loss, self.model.trainable_variables)
+        grads, _ = tf.clip_by_global_norm(grads, 1.0)
+        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
+        return loss
+
     def _update_dqn(self, buffer: RolloutBuffer) -> Dict[str, float]:
         """DQN-style update: store transitions in replay buffer, sample and train."""
         # Add transitions to replay buffer
@@ -450,10 +471,15 @@ class OnlineSpecialistTrainer:
             if self._dqn_step_count % self.dqn_config.target_update_freq == 0:
                 self.target_model.set_weights(self.model.get_weights())
 
-        # Decay epsilon
-        self._epsilon = max(
-            self.dqn_config.epsilon_end,
-            self._epsilon - (self.dqn_config.epsilon_start - self.dqn_config.epsilon_end) / self.dqn_config.epsilon_decay_steps,
+        # Decay epsilon linearly in ENVIRONMENT steps (transitions seen), so
+        # epsilon_decay_steps is interpreted as env steps regardless of how
+        # updates are batched. (The original schedule decayed once per update
+        # call, which left epsilon ~1.0 forever in episode-wise training.)
+        self._dqn_env_steps += len(buffer)
+        frac = min(1.0, self._dqn_env_steps / max(self.dqn_config.epsilon_decay_steps, 1))
+        self._epsilon = (
+            self.dqn_config.epsilon_start
+            + frac * (self.dqn_config.epsilon_end - self.dqn_config.epsilon_start)
         )
 
         avg_loss = total_loss / num_updates
@@ -461,21 +487,25 @@ class OnlineSpecialistTrainer:
 
     @tf.function
     def _dqn_step(self, states, actions, rewards, next_states, dones, gamma):
-        """Double DQN update step."""
-        with tf.GradientTape() as tape:
-            # Online network Q-values for current states
-            q_probs, q_vals = self.model(states, training=True)
+        """Double DQN update step on RAW dueling Q-values.
 
-            # Get online Q-values for selected actions
+        Note: an earlier version of this update regressed the model's softmax
+        output instead of Q-values; that variant is preserved for reference in
+        `_dqn_step_legacy_softmax` and was used for the originally published
+        adaptive-DDQN results.
+        """
+        with tf.GradientTape() as tape:
+            q_online = self.model.q_values(states, training=True)
+
             a_onehot = tf.one_hot(actions, depth=self.num_actions)
-            q_selected = tf.reduce_sum(q_probs * a_onehot, axis=-1)
+            q_selected = tf.reduce_sum(q_online * a_onehot, axis=-1)
 
             # Double DQN: online net picks action, target net evaluates
-            next_probs, _ = self.model(next_states, training=False)
-            next_actions = tf.argmax(next_probs, axis=-1)
-            target_probs, target_vals = self.target_model(next_states, training=False)
+            q_next_online = self.model.q_values(next_states, training=False)
+            next_actions = tf.argmax(q_next_online, axis=-1)
+            q_next_target = self.target_model.q_values(next_states, training=False)
             next_a_onehot = tf.one_hot(next_actions, depth=self.num_actions)
-            target_q_next = tf.reduce_sum(target_probs * next_a_onehot, axis=-1)
+            target_q_next = tf.reduce_sum(q_next_target * next_a_onehot, axis=-1)
 
             # TD target: r + gamma * Q_target(s', argmax_a Q_online(s', a))
             targets = rewards + gamma * target_q_next * (1.0 - dones)
@@ -606,10 +636,14 @@ class MultiAgentOnlineTrainer:
         self.partition_trainer.reset_episode_state()
 
     def step(
-        self, sim: LakeSimulator, obs_dict: Dict,
+        self, sim: LakeSimulator, obs_dict: Dict, greedy: bool = False,
     ) -> Dict[str, Any]:
         """
         Execute one step in the multi-agent loop.
+
+        greedy=True → deterministic argmax action selection (use for frozen
+        evaluation); greedy=False → stochastic sampling / epsilon-greedy
+        (use for adaptive training).
 
         Returns dict with keys:
             delegation, action_idx, reward, result, next_obs_dict,
@@ -646,7 +680,7 @@ class MultiAgentOnlineTrainer:
 
         # Specialist acts
         window = trainer._obs_to_window(obs)
-        action_idx, action, probs, value, log_prob = trainer.select_action(window)
+        action_idx, action, probs, value, log_prob = trainer.select_action(window, greedy=greedy)
         result = sim.run_step(action)
         reward = float(getattr(result, trainer.reward_attr))
         next_obs_dict = sim.get_observation()

@@ -1009,9 +1009,11 @@ def main_page():
                     if not online_training_active:
                         break
 
-                    # Run one multi-agent step
+                    # Run one multi-agent step.
+                    # Frozen mode evaluates deterministically (argmax);
+                    # adaptive mode explores (sampling / epsilon-greedy).
                     step_info = await asyncio.to_thread(
-                        online_trainer.step, sim, obs_dict,
+                        online_trainer.step, sim, obs_dict, not is_adaptive,
                     )
                     result = step_info['result']
                     next_obs_dict = step_info['next_obs_dict']

@@ -78,12 +78,16 @@ def extract_compact_features(
     p = prefix
     features = np.zeros((len(df), 8), dtype=np.float32)
 
-    # z-score
+    # z-score with FIXED workload-calibrated constants — must match
+    # agents.compaction_agent.CompactionAgent (_rows_mean etc.).
+    # Per-dataset z-scoring (the previous behavior) created train/serve skew.
+    ROWS_MEAN, ROWS_STD = 94.0, 71.0
+    RATE_MEAN, RATE_STD = 318.0, 218.0
     rows = df[f'{p}rows_ingested'].values.astype(np.float32)
-    features[:, 0] = (rows - rows.mean()) / max(rows.std(), 1e-6)
+    features[:, 0] = (rows - ROWS_MEAN) / ROWS_STD
 
     rate = df[f'{p}ingestion_rate_rows_per_sec'].values.astype(np.float32)
-    features[:, 1] = (rate - rate.mean()) / max(rate.std(), 1e-6)
+    features[:, 1] = (rate - RATE_MEAN) / RATE_STD
 
     # min-max (ceilings match simulation.py constants)
     features[:, 2] = np.clip(df[f'{p}latency_ms'].values / 15000.0, 0, 1)
