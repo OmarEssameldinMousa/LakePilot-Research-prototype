@@ -1,0 +1,4 @@
+variant,meta_controller_median_ms,meta_controller_p95_ms,compaction_median_ms,compaction_p95_ms,partition_median_ms,partition_p95_ms,full_step_median_ms,full_step_p95_ms,params_compaction,params_partition,params_total,device,iterations
+DDQN,0.0019,0.003,4.5981,5.4897,4.8157,8.0723,4.7999,6.2817,71237,122502,193739,CPU,10000
+AttentivePPO-clip,0.0019,0.003,11.2547,17.134,11.498,16.6418,10.7318,12.5743,84741,85830,170571,CPU,10000
+MLP-PPO,0.0019,0.003,3.3934,3.865,3.5127,4.1762,3.4797,4.0607,70469,121734,192203,CPU,10000

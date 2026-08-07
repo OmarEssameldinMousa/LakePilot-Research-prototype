@@ -1,0 +1,32 @@
+{
+  "tag": "partition_ddqn_seed4",
+  "seed": 4,
+  "arch": "ddqn",
+  "specialist": "partition",
+  "algorithm": "double_dqn_rawQ",
+  "hyperparams": {
+    "epochs": 150,
+    "lr": 0.0001,
+    "batch": 64,
+    "target_freq": 50,
+    "gamma": 0.99,
+    "window_size": 20,
+    "num_features": 14,
+    "num_actions": 5
+  },
+  "normalization": {
+    "rows_mean": 94.0,
+    "rows_std": 71.0,
+    "rate_mean": 318.0,
+    "rate_std": 218.0
+  },
+  "n_train_samples": 4990,
+  "trainable_params": 122502,
+  "approx_gradient_updates": 11550,
+  "wall_clock_sec": 85.2,
+  "final_loss": 2.3686348566642175,
+  "gpu": "Tesla T4\nTesla T4",
+  "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+  "tf_version": "2.20.0",
+  "timestamp": "2026-07-31T20:48:49"
+}

@@ -148,6 +148,22 @@ def run_episode(sim, policy, steps: int, env_seed: int, policy_label: str):
                   f"files={result.file_count} R={result.global_reward:+.3f}", flush=True)
     wall = time.time() - t0
 
+    # ── Environment-health guard ──────────────────────────────────────────
+    # A Spark driver crash does not raise here: metrics collection returns 0 and
+    # the query returns latency -1, which the reward formula maps to exactly 0.0.
+    # Without this check the runner keeps "stepping" against a dead JVM and then
+    # writes a status="done" manifest over meaningless data (observed 2026-08-07
+    # on PartitionOnly seeds 2-3). Fail loudly instead.
+    rows_chk = collector._transitions
+    mean_lat = float(np.mean([r["latency_ms"] for r in rows_chk]))
+    mean_fc = float(np.mean([r["file_count"] for r in rows_chk]))
+    if mean_lat <= 0 or mean_fc == 0 or mean_lat > 60_000:
+        raise RuntimeError(
+            f"environment health check FAILED (env_seed={env_seed}): "
+            f"mean_latency={mean_lat:.1f}ms mean_file_count={mean_fc:.1f} — "
+            f"the Spark driver most likely died; this episode is not valid data."
+        )
+
     summary = {
         "env_seed": env_seed,
         "steps": steps,

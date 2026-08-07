@@ -1,5 +1,5 @@
 {
-  "status": "running",
+  "status": "done",
   "policy": "WorkloadAwareThreshold",
   "policy_class": "WorkloadAwareThresholdPolicy",
   "model_type": null,
@@ -26,5 +26,7 @@
     "cpu_count": 8,
     "mem_total_kb": 16109684
   },
-  "started_at": "2026-07-31T20:48:10.759627"
+  "started_at": "2026-07-31T20:48:10.759627",
+  "finished_at": "2026-07-31T21:29:11.786115",
+  "total_wall_clock_sec": 2461.0
 }

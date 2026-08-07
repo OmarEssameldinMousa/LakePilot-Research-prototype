@@ -304,6 +304,60 @@ class RandomPartitionPolicy(BasePolicy):
 
 
 # ═══════════════════════════════════════════════════════════════
+# RECOVERY EXPLORATION (offline-RL training data)
+# ═══════════════════════════════════════════════════════════════
+
+class RecoveryExplorationPolicy(BasePolicy):
+    """
+    Generates counterfactual "recovery" demonstrations for offline RL:
+    let files accumulate for a random number of steps (NOOP), then issue
+    random compaction actions, and repeat.
+
+    Purpose: heuristic logs contain no examples of compacting a *stale,
+    file-heavy* table (compaction-happy policies never reach that state;
+    No_Maintenance reaches it but never compacts). Without such
+    counterfactuals, offline imitation collapses to NOOP in exactly the
+    states a freshly deployed agent starts in. This policy covers that
+    state region with randomized actions and their observed outcomes.
+    """
+
+    BUILD_MIN, BUILD_MAX = 20, 150      # NOOP phase length (steps)
+    RECOVER_MIN, RECOVER_MAX = 1, 6     # consecutive random compactions
+
+    COMPACT_CHOICES = [Action.COMPACT_32KB, Action.COMPACT_64KB, Action.COMPACT_128KB]
+
+    def __init__(self):
+        self._phase = "build"
+        self._phase_left = random.randint(self.BUILD_MIN, self.BUILD_MAX)
+        super().__init__(
+            name="RecoveryExploration",
+            description="Random build-up (NOOP) / recovery (random compaction) cycles.",
+        )
+
+    def get_action(self, obs: Observation) -> Action:
+        if self._phase_left <= 0:
+            if self._phase == "build":
+                self._phase = "recover"
+                self._phase_left = random.randint(self.RECOVER_MIN, self.RECOVER_MAX)
+            else:
+                self._phase = "build"
+                self._phase_left = random.randint(self.BUILD_MIN, self.BUILD_MAX)
+
+        self._phase_left -= 1
+        if self._phase == "recover":
+            action = random.choice(self.COMPACT_CHOICES)
+        else:
+            action = Action.NOOP
+        self._record_action(action)
+        return action
+
+    def reset(self) -> None:
+        super().reset()
+        self._phase = "build"
+        self._phase_left = random.randint(self.BUILD_MIN, self.BUILD_MAX)
+
+
+# ═══════════════════════════════════════════════════════════════
 # REGISTRY
 # ═══════════════════════════════════════════════════════════════
 
@@ -312,4 +366,5 @@ WORKLOAD_BASELINE_REGISTRY = {
     "WorkloadAwareThreshold":   WorkloadAwareThresholdPolicy,
     "PartitionExploration":     PartitionExplorationPolicy,
     "Random_Partition":         RandomPartitionPolicy,
+    "RecoveryExploration":      RecoveryExplorationPolicy,
 }

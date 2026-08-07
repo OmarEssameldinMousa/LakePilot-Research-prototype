@@ -1,0 +1,4 @@
+agent,n_seeds,n_episodes,reward,reward_ci,reward_seed_sd,latency_ms,latency_ms_ci,latency_ms_seed_sd,files,files_ci,files_seed_sd,pruning,pruning_ci,pruning_seed_sd
+DDQN (hierarchical RL),5,5,0.2306,"[0.2110, 0.2463]",0.0238,343.9,"[321.4, 370.9]",31.3,64.7,"[63.5, 66.1]",1.7,0.2347,"[0.1723, 0.2816]",0.074
+AttentivePPO-clip (hierarchical RL),5,5,0.1923,"[0.1564, 0.2232]",0.0421,498.1,"[373.1, 623.1]",157.3,89.7,"[58.8, 120.6]",38.9,0.2414,"[0.2029, 0.2735]",0.0444
+MLP-PPO (hierarchical RL),5,5,0.1731,"[0.1508, 0.1971]",0.0294,637.2,"[543.3, 738.4]",128.5,127.7,"[104.3, 149.4]",29.3,0.2508,"[0.2135, 0.2815]",0.0444

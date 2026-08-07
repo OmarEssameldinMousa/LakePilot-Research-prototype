@@ -1,0 +1,36 @@
+{
+  "status": "done",
+  "label": "adaptive_mlp_ppo",
+  "mode": "adaptive",
+  "model_type": "mlp_ppo",
+  "seed_slot": 4,
+  "compact_weights": "/app/revision/phase1_stats/phase1_weights/weights/compaction_mlp_ppo_seed4.weights.h5",
+  "partition_weights": "/app/revision/phase1_stats/phase1_weights/weights/partition_mlp_ppo_seed4.weights.h5",
+  "episodes": 5,
+  "steps_per_episode": 500,
+  "plan_file": "workload_plan_v5_eval.json",
+  "update_every": 128,
+  "lr": 0.0003,
+  "env_seeds": [
+    25401,
+    25402,
+    25403,
+    25404,
+    25405
+  ],
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109680
+  },
+  "started_at": "2026-08-07T13:25:39.379728",
+  "epsilon": {
+    "start": 0.1,
+    "end": 0.02,
+    "decay_steps": 200
+  },
+  "finished_at": "2026-08-07T14:03:16.176893",
+  "total_wall_clock_sec": 2250.9
+}

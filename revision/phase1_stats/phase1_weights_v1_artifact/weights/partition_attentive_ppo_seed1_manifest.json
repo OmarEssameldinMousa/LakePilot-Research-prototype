@@ -1,0 +1,33 @@
+{
+  "tag": "partition_attentive_ppo_seed1",
+  "seed": 1,
+  "arch": "attentive_ppo",
+  "specialist": "partition",
+  "algorithm": "awr_shaped_balanced",
+  "hyperparams": {
+    "epochs": 200,
+    "lr": 0.0003,
+    "beta": 1.0,
+    "batch": 64,
+    "ent": 0.1,
+    "gamma": 0.99,
+    "window_size": 20,
+    "num_features": 14,
+    "num_actions": 5
+  },
+  "normalization": {
+    "rows_mean": 94.0,
+    "rows_std": 71.0,
+    "rate_mean": 318.0,
+    "rate_std": 218.0
+  },
+  "n_train_samples": 4990,
+  "trainable_params": 85830,
+  "approx_gradient_updates": 15400,
+  "wall_clock_sec": 46.0,
+  "final_loss": 0.6709166080863388,
+  "gpu": "Tesla T4\nTesla T4",
+  "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+  "tf_version": "2.20.0",
+  "timestamp": "2026-07-31T20:07:29"
+}

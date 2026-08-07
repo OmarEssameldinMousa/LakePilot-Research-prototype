@@ -177,6 +177,7 @@ class OnlineSpecialistTrainer:
         dqn_config: Optional[DQNConfig] = None,
         weights_path: Optional[str] = None,
         model_type: str = "attentive_ppo",
+        seed: Optional[int] = None,
     ):
         if specialist not in {"compaction", "partition"}:
             raise ValueError("specialist must be 'compaction' or 'partition'")
@@ -185,7 +186,13 @@ class OnlineSpecialistTrainer:
         self.model_type = model_type
         self.config = config or PPOConfig()
         self.dqn_config = dqn_config or DQNConfig()
-        set_global_seeds(self.config.seed)
+        # Seed selection: an explicit seed wins; otherwise take it from the config
+        # that actually governs this model type. (Previously this always read
+        # PPOConfig.seed, so DDQN runs silently ignored DQNConfig.seed and every
+        # "independent" DDQN run used seed 42.)
+        self.seed = (seed if seed is not None
+                     else (self.dqn_config.seed if model_type == "ddqn" else self.config.seed))
+        set_global_seeds(self.seed)
 
         # Store gamma as plain float for @tf.function compatibility
         self._gamma = float(self.config.gamma)
@@ -595,31 +602,27 @@ class MultiAgentOnlineTrainer:
         dqn_config: Optional[DQNConfig] = None,
         compact_weights: Optional[str] = None,
         partition_weights: Optional[str] = None,
+        seed: Optional[int] = None,
     ):
         self.model_type = model_type
         self.config = config or PPOConfig()
         self.dqn_config = dqn_config or DQNConfig()
-        set_global_seeds(self.config.seed)
+        self.seed = (seed if seed is not None
+                     else (self.dqn_config.seed if model_type == "ddqn" else self.config.seed))
+        set_global_seeds(self.seed)
 
-        # Build specialist trainers (they handle model creation internally)
-        if model_type == "ddqn":
-            self.compact_trainer = OnlineSpecialistTrainer(
-                "compaction", dqn_config=self.dqn_config,
-                weights_path=compact_weights, model_type=model_type,
-            )
-            self.partition_trainer = OnlineSpecialistTrainer(
-                "partition", dqn_config=self.dqn_config,
-                weights_path=partition_weights, model_type=model_type,
-            )
-        else:
-            self.compact_trainer = OnlineSpecialistTrainer(
-                "compaction", config=self.config,
-                weights_path=compact_weights, model_type=model_type,
-            )
-            self.partition_trainer = OnlineSpecialistTrainer(
-                "partition", config=self.config,
-                weights_path=partition_weights, model_type=model_type,
-            )
+        # Build specialist trainers (they handle model creation internally).
+        # Both configs are always passed so the seed is unambiguous, and the two
+        # specialists get distinct seeds — otherwise the partition model would be
+        # initialised from the same RNG state as the compaction model.
+        self.compact_trainer = OnlineSpecialistTrainer(
+            "compaction", config=self.config, dqn_config=self.dqn_config,
+            weights_path=compact_weights, model_type=model_type, seed=self.seed,
+        )
+        self.partition_trainer = OnlineSpecialistTrainer(
+            "partition", config=self.config, dqn_config=self.dqn_config,
+            weights_path=partition_weights, model_type=model_type, seed=self.seed + 10_000,
+        )
 
         # Meta-controller (rule-based, not trained)
         from agents.meta_controller import MetaController, Delegation

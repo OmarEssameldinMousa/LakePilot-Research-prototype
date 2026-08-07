@@ -1,0 +1,97 @@
+{
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "cpu_count": 8,
+    "device": "CPU",
+    "gpu_present": "none",
+    "cpu_model": "11th Gen Intel(R) Core(TM) i7-1165G7 @ 2.80GHz"
+  },
+  "iterations": 10000,
+  "variants": {
+    "DDQN": {
+      "compaction_forward": {
+        "median_ms": 4.5981,
+        "mean_ms": 4.674,
+        "p95_ms": 5.4897,
+        "p99_ms": 6.3901,
+        "n": 10000
+      },
+      "partition_forward": {
+        "median_ms": 4.8157,
+        "mean_ms": 5.2537,
+        "p95_ms": 8.0723,
+        "p99_ms": 10.5898,
+        "n": 10000
+      },
+      "full_hierarchical_step": {
+        "median_ms": 4.7999,
+        "mean_ms": 4.6603,
+        "p95_ms": 6.2817,
+        "p99_ms": 8.9282,
+        "n": 10000
+      },
+      "params_compaction": 71237,
+      "params_partition": 122502,
+      "params_total": 193739
+    },
+    "AttentivePPO-clip": {
+      "compaction_forward": {
+        "median_ms": 11.2547,
+        "mean_ms": 12.0174,
+        "p95_ms": 17.134,
+        "p99_ms": 25.1105,
+        "n": 10000
+      },
+      "partition_forward": {
+        "median_ms": 11.498,
+        "mean_ms": 12.0796,
+        "p95_ms": 16.6418,
+        "p99_ms": 23.7709,
+        "n": 10000
+      },
+      "full_hierarchical_step": {
+        "median_ms": 10.7318,
+        "mean_ms": 10.1719,
+        "p95_ms": 12.5743,
+        "p99_ms": 15.7364,
+        "n": 10000
+      },
+      "params_compaction": 84741,
+      "params_partition": 85830,
+      "params_total": 170571
+    },
+    "MLP-PPO": {
+      "compaction_forward": {
+        "median_ms": 3.3934,
+        "mean_ms": 3.4494,
+        "p95_ms": 3.865,
+        "p99_ms": 4.3381,
+        "n": 10000
+      },
+      "partition_forward": {
+        "median_ms": 3.5127,
+        "mean_ms": 3.5932,
+        "p95_ms": 4.1762,
+        "p99_ms": 5.2568,
+        "n": 10000
+      },
+      "full_hierarchical_step": {
+        "median_ms": 3.4797,
+        "mean_ms": 3.2816,
+        "p95_ms": 4.0607,
+        "p99_ms": 4.9331,
+        "n": 10000
+      },
+      "params_compaction": 70469,
+      "params_partition": 121734,
+      "params_total": 192203
+    }
+  },
+  "meta_controller": {
+    "median_ms": 0.0019,
+    "mean_ms": 0.002,
+    "p95_ms": 0.003,
+    "p99_ms": 0.004,
+    "n": 10000
+  }
+}

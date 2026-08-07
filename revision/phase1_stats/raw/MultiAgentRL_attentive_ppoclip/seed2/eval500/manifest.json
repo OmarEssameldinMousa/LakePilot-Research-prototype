@@ -1,0 +1,32 @@
+{
+  "status": "done",
+  "policy": "MultiAgentRL_attentive_ppoclip",
+  "policy_class": "MultiAgentPolicy",
+  "model_type": "attentive_ppo",
+  "compact_weights": "/app/revision/phase1_stats/phase1_weights/weights/compaction_attentive_ppoclip_seed2.weights.h5",
+  "partition_weights": "/app/revision/phase1_stats/phase1_weights/weights/partition_attentive_ppoclip_seed2.weights.h5",
+  "seed_slot": 2,
+  "protocol": "eval500",
+  "plan_file": "workload_plan_v5_eval.json",
+  "episodes": 5,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    15201,
+    15202,
+    15203,
+    15204,
+    15205
+  ],
+  "action_selection": "greedy_argmax",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109684
+  },
+  "started_at": "2026-08-02T00:23:20.103799",
+  "finished_at": "2026-08-02T01:14:14.717503",
+  "total_wall_clock_sec": 3054.6
+}

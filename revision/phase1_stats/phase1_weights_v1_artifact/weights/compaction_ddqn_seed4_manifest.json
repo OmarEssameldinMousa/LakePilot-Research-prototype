@@ -1,0 +1,32 @@
+{
+  "tag": "compaction_ddqn_seed4",
+  "seed": 4,
+  "arch": "ddqn",
+  "specialist": "compaction",
+  "algorithm": "double_dqn_rawQ",
+  "hyperparams": {
+    "epochs": 150,
+    "lr": 0.0001,
+    "batch": 64,
+    "target_freq": 50,
+    "gamma": 0.99,
+    "window_size": 10,
+    "num_features": 8,
+    "num_actions": 4
+  },
+  "normalization": {
+    "rows_mean": 94.0,
+    "rows_std": 71.0,
+    "rate_mean": 318.0,
+    "rate_std": 218.0
+  },
+  "n_train_samples": 14000,
+  "trainable_params": 71237,
+  "approx_gradient_updates": 32700,
+  "wall_clock_sec": 231.3,
+  "final_loss": 0.9658388193339518,
+  "gpu": "Tesla T4\nTesla T4",
+  "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+  "tf_version": "2.20.0",
+  "timestamp": "2026-07-31T20:47:23"
+}

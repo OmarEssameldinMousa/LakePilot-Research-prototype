@@ -1,0 +1,5 @@
+variant,hardware,params_total,wall_clock_per_agent_sec,wall_clock_per_agent_min,wall_clock_all_seeds_sec,wall_clock_all_seeds_min
+attentive_ppo,Tesla T4 ×2,170571,151.3,2.52,756.5,12.61
+attentive_ppoclip,none (local CPU),170571,197.9,3.3,989.3,16.49
+ddqn,Tesla T4 ×2,193739,135.5,2.26,677.8,11.3
+mlp_ppo,Tesla T4 ×2,192203,104.0,1.73,520.2,8.67

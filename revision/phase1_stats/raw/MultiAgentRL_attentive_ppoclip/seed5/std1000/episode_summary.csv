@@ -1,0 +1,2 @@
+env_seed,steps,wall_clock_sec,count,avg_global_reward,total_global_reward,action_distribution,avg_latency_ms,avg_file_count,avg_partition_pruning_ratio,avg_block_utilization,episode
+11005,1000,1398.4,1000,0.1347,134.7058,"{""NOOP"": 785, ""COMPACT_32KB"": 120, ""PARTITION_EVENT_TYPE"": 9, ""REMOVE_PARTITION"": 67, ""PARTITION_HOUR"": 3, ""COMPACT_64KB"": 3, ""PARTITION_REGION"": 3, ""COMPACT_128KB"": 10}",639.109412,125.603,0.173253,0.589896,1

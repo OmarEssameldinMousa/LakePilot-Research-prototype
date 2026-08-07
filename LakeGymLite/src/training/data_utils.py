@@ -96,8 +96,9 @@ def extract_compact_features(
     features[:, 5] = np.clip(df[f'{p}total_size_kb'].values / 50000.0, 0, 1)
     features[:, 6] = np.clip(df[f'{p}file_size_skew_kb'].values / 50.0, 0, 1)
 
-    # exponential decay
-    features[:, 7] = np.exp(-df[f'{p}steps_since_compact'].values / 10.0)
+    # exponential decay, capped at 10 (v2: removes trajectory-identity leak;
+    # must match agents.compaction_agent)
+    features[:, 7] = np.exp(-np.minimum(df[f'{p}steps_since_compact'].values, 10) / 10.0)
 
     return features
 
@@ -142,8 +143,9 @@ def extract_partition_features(
     features[:, 11] = df[f'{p}query_hist_type_filter'].values
     features[:, 12] = df[f'{p}query_hist_full_scan'].values
 
-    # 13: steps_since_partition_change (decay)
-    features[:, 13] = np.exp(-df[f'{p}steps_since_partition_change'].values / 30.0)
+    # 13: steps_since_partition_change (decay, capped at 60 — v2, see
+    # agents.partition_agent)
+    features[:, 13] = np.exp(-np.minimum(df[f'{p}steps_since_partition_change'].values, 60) / 30.0)
 
     return features
 

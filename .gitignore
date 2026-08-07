@@ -217,3 +217,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# ── Revision experiment artefacts ──
+# Batch driver logs: dominated by Spark ANSI progress bars (~18 MB), no scientific
+# content. Per-run provenance lives in each run's manifest.json instead.
+revision/**/*.log
+# Weight archives: redundant with the unpacked phase1_weights*/ directories.
+revision/phase1_stats/phase1_weights*.zip

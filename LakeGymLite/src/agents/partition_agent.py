@@ -88,8 +88,10 @@ class PartitionAgent(BaseAgent):
         f[11] = obs.query_hist_type_filter
         f[12] = obs.query_hist_full_scan
 
-        # 13: steps_since_partition_change (exponential decay)
-        f[13] = np.exp(-obs.steps_since_partition_change / self.DECAY_TAU)
+        # 13: steps_since_partition_change (exponential decay, CAPPED at 60)
+        # Cap removes trajectory-identity leakage (see CompactionAgent f7);
+        # must match training notebooks (pipeline v2 fix).
+        f[13] = np.exp(-min(obs.steps_since_partition_change, 60) / self.DECAY_TAU)
 
         return f
 

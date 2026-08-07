@@ -94,8 +94,12 @@ class CompactionAgent(BaseAgent):
         # 6: file_size_skew (min-max)
         f[6] = min(obs.file_size_skew_kb / self.SKEW_MAX, 1.0)
 
-        # 7: steps_since_compact (exponential decay)
-        f[7] = np.exp(-obs.steps_since_compact / self.DECAY_TAU)
+        # 7: steps_since_compact (exponential decay, CAPPED at 10)
+        # The cap removes the trajectory-identity fingerprint: uncapped, this
+        # feature separates AlwaysCompact (≈0) from No_Maintenance (→∞) and
+        # offline imitation learns to clone the driver instead of reading the
+        # table state (pipeline v2 fix; must match training notebooks).
+        f[7] = np.exp(-min(obs.steps_since_compact, 10) / self.DECAY_TAU)
 
         return f
 

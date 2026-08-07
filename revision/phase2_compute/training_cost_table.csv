@@ -1,0 +1,9 @@
+variant,specialist,algorithm,n_seeds,hardware,trainable_params,epochs,batch_size,n_train_samples,wall_clock_mean_sec,wall_clock_sd_sec,wall_clock_total_sec
+attentive_ppo,compaction,awr_balanced,5,Tesla T4 ×2,84741,150,64,17000,109.4,4.6,546.9
+attentive_ppo,partition,awr_balanced,5,Tesla T4 ×2,85830,200,64,4990,41.9,0.9,209.6
+attentive_ppoclip,compaction,ppo_clip_balanced,5,none (local CPU),84741,150,64,17000,127.9,3.1,639.5
+attentive_ppoclip,partition,ppo_clip_balanced,5,none (local CPU),85830,200,64,4990,70.0,3.5,349.8
+ddqn,compaction,double_dqn_rawQ_balanced,5,Tesla T4 ×2,71237,150,64,17000,97.1,2.3,485.6
+ddqn,partition,double_dqn_rawQ_balanced,5,Tesla T4 ×2,122502,200,64,4990,38.4,0.8,192.2
+mlp_ppo,compaction,offline_ppo_clip_balanced,5,Tesla T4 ×2,70469,150,64,17000,74.9,1.2,374.5
+mlp_ppo,partition,offline_ppo_clip_balanced,5,Tesla T4 ×2,121734,200,64,4990,29.1,0.5,145.7

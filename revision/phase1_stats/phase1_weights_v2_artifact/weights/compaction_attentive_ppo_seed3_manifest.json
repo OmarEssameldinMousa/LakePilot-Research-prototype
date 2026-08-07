@@ -1,0 +1,32 @@
+{
+  "tag": "compaction_attentive_ppo_seed3",
+  "seed": 3,
+  "arch": "attentive_ppo",
+  "specialist": "compaction",
+  "algorithm": "awr_returns",
+  "hyperparams": {
+    "epochs": 150,
+    "lr": 0.0003,
+    "beta": 1.0,
+    "batch": 64,
+    "gamma": 0.95,
+    "window_size": 10,
+    "num_features": 8,
+    "num_actions": 4
+  },
+  "normalization": {
+    "rows_mean": 94.0,
+    "rows_std": 71.0,
+    "rate_mean": 318.0,
+    "rate_std": 218.0
+  },
+  "n_train_samples": 17000,
+  "trainable_params": 84741,
+  "approx_gradient_updates": 39750,
+  "wall_clock_sec": 235.5,
+  "final_loss": 0.40962309218877185,
+  "gpu": "Tesla T4\nTesla T4",
+  "platform": "Linux-6.12.90+-x86_64-with-glibc2.35",
+  "tf_version": "2.20.0",
+  "timestamp": "2026-08-01T19:05:48"
+}

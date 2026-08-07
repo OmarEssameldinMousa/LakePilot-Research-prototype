@@ -1,0 +1,6 @@
+env_seed,steps,wall_clock_sec,count,avg_global_reward,total_global_reward,action_distribution,avg_latency_ms,avg_file_count,avg_partition_pruning_ratio,avg_block_utilization,episode
+15501,500,563.2,500,0.08,40.024,"{""NOOP"": 435, ""COMPACT_32KB"": 63, ""COMPACT_64KB"": 2}",492.4118,71.35,0.0,0.484291,1
+15502,500,487.7,500,0.0943,47.1336,"{""NOOP"": 434, ""COMPACT_32KB"": 63, ""COMPACT_128KB"": 2, ""COMPACT_64KB"": 1}",391.514279,63.238,0.0,0.546792,2
+15503,500,508.1,500,0.0735,36.7715,"{""NOOP"": 423, ""COMPACT_32KB"": 75, ""COMPACT_64KB"": 2}",431.038337,73.554,0.0,0.446846,3
+15504,500,578.2,500,0.0868,43.3939,"{""NOOP"": 419, ""COMPACT_32KB"": 79, ""COMPACT_128KB"": 1, ""COMPACT_64KB"": 1}",459.519001,65.772,0.0,0.517119,4
+15505,500,565.1,500,0.0832,41.5982,"{""NOOP"": 427, ""COMPACT_32KB"": 68, ""COMPACT_64KB"": 5}",461.945267,68.87,0.0,0.495751,5

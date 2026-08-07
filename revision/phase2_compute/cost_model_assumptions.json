@@ -1,0 +1,9 @@
+{
+  "query_cost_per_ms": 1e-05,
+  "compact_cost_per_op": 0.005,
+  "storage_cost_per_kb": 1e-06,
+  "cpu_usd_per_hour": 0.096,
+  "gpu_usd_per_hour": 0.526,
+  "amortisation_episodes": 100,
+  "no_maintenance_source": "published single-episode run (no CI)"
+}

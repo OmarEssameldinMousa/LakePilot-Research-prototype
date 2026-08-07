@@ -1,0 +1,32 @@
+{
+  "status": "done",
+  "policy": "AlwaysCompact_C128",
+  "policy_class": "AlwaysCompactPolicy",
+  "model_type": null,
+  "compact_weights": null,
+  "partition_weights": null,
+  "seed_slot": 4,
+  "protocol": "eval500",
+  "plan_file": "workload_plan_v5_eval.json",
+  "episodes": 5,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    15401,
+    15402,
+    15403,
+    15404,
+    15405
+  ],
+  "action_selection": "deterministic_rule",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109684
+  },
+  "started_at": "2026-08-01T07:14:04.489825",
+  "finished_at": "2026-08-01T07:57:08.328752",
+  "total_wall_clock_sec": 2583.8
+}
