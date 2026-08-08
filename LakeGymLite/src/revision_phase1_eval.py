@@ -192,6 +192,10 @@ def main():
                     choices=list(PROTOCOLS.keys()))
     ap.add_argument("--out", default="/app/revision/phase1_stats/raw")
     ap.add_argument("--label", default=None, help="Output folder name (default: policy name)")
+    ap.add_argument("--episodes", type=int, default=None,
+                    help="Override the protocol's episode count (Phase 3 sweeps use fewer "
+                         "episodes per configuration). Env seeds are unchanged, so runs "
+                         "remain paired with the full-length protocol.")
     args = ap.parse_args()
 
     label = args.label or args.policy
@@ -207,6 +211,8 @@ def main():
     for slot in args.seeds:
         for proto in args.protocols:
             plan_file, n_eps, steps = PROTOCOLS[proto]
+            if args.episodes is not None:
+                n_eps = args.episodes
             out_dir = os.path.join(args.out, label, f"seed{slot}", proto)
             manifest_path = os.path.join(out_dir, "manifest.json")
 

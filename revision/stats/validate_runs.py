@@ -26,7 +26,14 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[2]
-RAW = ROOT / 'revision' / 'phase1_stats' / 'raw'
+# Every directory that holds seeded evaluation output. All are exposed to the
+# same silent Spark-crash failure mode, so all must be audited.
+RAW_ROOTS = [
+    ROOT / 'revision' / 'phase1_stats' / 'raw',
+    ROOT / 'revision' / 'phase1_stats' / 'recovery_data',
+    ROOT / 'revision' / 'phase3_sensitivity',
+    ROOT / 'revision' / 'phase5_generalization',
+]
 
 # An episode whose mean latency exceeds this is not a slow query, it is a crash.
 ABSURD_LATENCY_MS = 60_000
@@ -64,7 +71,11 @@ def main():
 
     bad_dirs = []
     n_ok = 0
-    for f in sorted(glob.glob(str(RAW / '*' / 'seed*' / '*' / 'episode_summary.csv'))):
+    files = []
+    for root in RAW_ROOTS:
+        # depth varies: phase1 raw/<policy>/seed/<proto>/, phase3 <sweep>/<cfg>/seed/<proto>/
+        files += glob.glob(str(root / '**' / 'episode_summary.csv'), recursive=True)
+    for f in sorted(set(files)):
         p = Path(f)
         problems, n = check(p)
         rel = '/'.join(p.parts[-4:-1])

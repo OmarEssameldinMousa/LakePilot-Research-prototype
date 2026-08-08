@@ -15,6 +15,7 @@ Key v5 changes over LakeGymLite v4:
   • Partition pruning ratio computed deterministically
 """
 
+import os
 import time
 import random
 import string
@@ -122,6 +123,10 @@ _BASE_PRUNING: Dict[Tuple[QueryType, PartitionStrategy], float] = {
     (QueryType.REGION_FILTER, PartitionStrategy.REGION):     0.67,   # 1/3 regions
     (QueryType.TYPE_FILTER,   PartitionStrategy.EVENT_TYPE): 0.67,   # 1/3 types
 }
+
+# Multiplier applied to every non-zero pruning value (revision Phase 3
+# sensitivity analysis). 1.0 reproduces the published matrix exactly.
+PRUNING_SCALE = float(os.environ.get('LAKEGYM_PRUNING_SCALE', '1.0'))
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -830,9 +835,14 @@ class LakeSimulator:
         if ps == PartitionStrategy.UNPARTITIONED:
             return 0.0
 
+        # Sensitivity-analysis scaling (revision Phase 3): multiply all non-zero
+        # pruning values by a constant, clipped to [0, 1], to test whether the
+        # RL-vs-heuristic gap survives a weaker (or stronger) pruning benefit.
+        # Defaults to 1.0, so behaviour is unchanged unless explicitly set.
         base = _BASE_PRUNING.get((qtype, ps), 0.0)
         if base == 0.0:
             return 0.0
+        base = min(max(base * PRUNING_SCALE, 0.0), 1.0)
 
         # Coverage: fraction of data in the partitioned layout
         if compacted:

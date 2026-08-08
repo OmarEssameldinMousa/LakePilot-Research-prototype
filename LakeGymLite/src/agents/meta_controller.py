@@ -10,6 +10,7 @@ interpretable — important for research reproducibility and paper presentation.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
@@ -77,11 +78,30 @@ class MetaController:
     PRUNING_LOW = 0.25      # avg pruning below this → consider re-partition
     DIVERSITY_THRESHOLD = 0.45  # if dominant query type fraction > this → focused workload
 
+    # Utilisation-boost magnitude (was hard-coded inline as 0.15)
+    UTIL_BOOST = 0.15
+
     def __init__(self):
+        # Sensitivity-analysis overrides (revision Phase 3). Defaults reproduce the
+        # published constants exactly, so behaviour is unchanged unless a caller
+        # explicitly sets these environment variables.
+        self.MIN_URGENCY = float(os.getenv('LAKEGYM_META_THETA', MetaController.MIN_URGENCY))
+        self.UTIL_BOOST = float(os.getenv('LAKEGYM_META_UTIL_BOOST', MetaController.UTIL_BOOST))
+        self.COMPACT_COOLDOWN = int(os.getenv('LAKEGYM_META_COMPACT_COOLDOWN',
+                                              MetaController.COMPACT_COOLDOWN))
+        self.PARTITION_COOLDOWN = int(os.getenv('LAKEGYM_META_PARTITION_COOLDOWN',
+                                                MetaController.PARTITION_COOLDOWN))
+
         self._step = 0
         self._last_compact_step = 0
         self._last_partition_step = 0
         self._last_decision: Optional[MetaDecision] = None
+
+    def config(self) -> Dict[str, Any]:
+        """Active constants, for run manifests."""
+        return {'min_urgency': self.MIN_URGENCY, 'util_boost': self.UTIL_BOOST,
+                'compact_cooldown': self.COMPACT_COOLDOWN,
+                'partition_cooldown': self.PARTITION_COOLDOWN}
 
     def decide(self, obs: Observation) -> MetaDecision:
         """
@@ -156,7 +176,7 @@ class MetaController:
 
         # Boost if block utilization is very low
         if obs.block_utilization < self.UTIL_LOW and fc > 3:
-            u = min(u + 0.15, 1.0)
+            u = min(u + self.UTIL_BOOST, 1.0)
 
         return u
 

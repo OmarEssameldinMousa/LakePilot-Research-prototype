@@ -1,0 +1,62 @@
+[
+  {
+    "scale": 0.8,
+    "policy": "MultiAgentRL",
+    "label": "prune0p8_ddqn",
+    "ok": true
+  },
+  {
+    "scale": 0.8,
+    "policy": "WorkloadAwareThreshold",
+    "label": "prune0p8_wat",
+    "ok": true
+  },
+  {
+    "scale": 0.9,
+    "policy": "MultiAgentRL",
+    "label": "prune0p9_ddqn",
+    "ok": true
+  },
+  {
+    "scale": 0.9,
+    "policy": "WorkloadAwareThreshold",
+    "label": "prune0p9_wat",
+    "ok": true
+  },
+  {
+    "scale": 1.0,
+    "policy": "MultiAgentRL",
+    "label": "prune1p0_ddqn",
+    "ok": true
+  },
+  {
+    "scale": 1.0,
+    "policy": "WorkloadAwareThreshold",
+    "label": "prune1p0_wat",
+    "ok": true
+  },
+  {
+    "scale": 1.1,
+    "policy": "MultiAgentRL",
+    "label": "prune1p1_ddqn",
+    "ok": true
+  },
+  {
+    "scale": 1.1,
+    "policy": "WorkloadAwareThreshold",
+    "label": "prune1p1_wat",
+    "ok": true
+  },
+  {
+    "scale": 1.2,
+    "policy": "MultiAgentRL",
+    "label": "prune1p2_ddqn",
+    "ok": true
+  },
+  {
+    "scale": 1.2,
+    "policy": "WorkloadAwareThreshold",
+    "label": "prune1p2_wat",
+    "ok": true
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "status": "done",
+  "policy": "prune1p2_wat",
+  "policy_class": "WorkloadAwareThresholdPolicy",
+  "model_type": null,
+  "compact_weights": null,
+  "partition_weights": null,
+  "seed_slot": 1,
+  "protocol": "eval500",
+  "plan_file": "workload_plan_v5_eval.json",
+  "episodes": 1,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    15101
+  ],
+  "action_selection": "deterministic_rule",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109680
+  },
+  "started_at": "2026-08-08T03:06:29.710165",
+  "finished_at": "2026-08-08T03:15:57.044840",
+  "total_wall_clock_sec": 567.3
+}
