@@ -1,0 +1,10 @@
+variant,spearman_vs_published,top_policy,top_unchanged,n_rank_changes
+files +25%,1.0,DDQN,True,0
+files -25%,1.0,DDQN,True,0
+latency +25%,1.0,DDQN,True,0
+latency -25%,1.0,DDQN,True,0
+pruning +25%,0.9500000000000001,DDQN,True,3
+pruning -25%,0.9500000000000001,DDQN,True,3
+published,1.0,DDQN,True,0
+util +25%,0.9833333333333333,DDQN,True,2
+util -25%,0.9500000000000001,DDQN,True,3
