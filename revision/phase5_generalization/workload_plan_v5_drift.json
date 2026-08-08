@@ -1,0 +1,82 @@
+{
+    "name": "LakeGym v5 Drifting Workload",
+    "description": "500-step generalization workload. Same five query profiles and the same order as the standard plan, but transitions are LINEAR INTERPOLATIONS of query-type probabilities over a 50-step window instead of abrupt switches. Held out: the agents were trained only on trajectories with abrupt shifts.",
+    "total_steps": 500,
+    "transition_steps": 50,
+    "workload_schedule": [
+        {
+            "start": 1,
+            "end": 100,
+            "profile": "time_heavy",
+            "description": "Phase 1 -> drifts into region_heavy"
+        },
+        {
+            "start": 101,
+            "end": 200,
+            "profile": "region_heavy",
+            "description": "Phase 2 -> drifts into mixed"
+        },
+        {
+            "start": 201,
+            "end": 300,
+            "profile": "mixed",
+            "description": "Phase 3 -> drifts into type_heavy"
+        },
+        {
+            "start": 301,
+            "end": 400,
+            "profile": "type_heavy",
+            "description": "Phase 4 -> drifts into scan_heavy"
+        },
+        {
+            "start": 401,
+            "end": 500,
+            "profile": "scan_heavy",
+            "description": "Phase 5"
+        }
+    ],
+    "ingestion_schedule": [
+        {
+            "start": 1,
+            "end": 50,
+            "rows_min": 30,
+            "rows_max": 50,
+            "description": "Warm-up (low)"
+        },
+        {
+            "start": 51,
+            "end": 150,
+            "rows_min": 50,
+            "rows_max": 100,
+            "description": "Normal load"
+        },
+        {
+            "start": 151,
+            "end": 250,
+            "rows_min": 150,
+            "rows_max": 300,
+            "description": "Burst (high)"
+        },
+        {
+            "start": 251,
+            "end": 350,
+            "rows_min": 30,
+            "rows_max": 80,
+            "description": "Recovery (low-med)"
+        },
+        {
+            "start": 351,
+            "end": 450,
+            "rows_min": 50,
+            "rows_max": 100,
+            "description": "Normal load 2"
+        },
+        {
+            "start": 451,
+            "end": 500,
+            "rows_min": 20,
+            "rows_max": 50,
+            "description": "Wind-down"
+        }
+    ]
+}

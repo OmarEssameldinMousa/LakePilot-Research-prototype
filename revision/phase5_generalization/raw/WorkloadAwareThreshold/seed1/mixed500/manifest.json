@@ -1,0 +1,28 @@
+{
+  "status": "done",
+  "policy": "WorkloadAwareThreshold",
+  "policy_class": "WorkloadAwareThresholdPolicy",
+  "model_type": null,
+  "compact_weights": null,
+  "partition_weights": null,
+  "seed_slot": 1,
+  "protocol": "mixed500",
+  "plan_file": "/app/revision/phase5_generalization/workload_plan_v5_mixed.json",
+  "episodes": 1,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    55101
+  ],
+  "action_selection": "deterministic_rule",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109688
+  },
+  "started_at": "2026-08-08T18:27:41.618512",
+  "finished_at": "2026-08-08T18:36:07.119246",
+  "total_wall_clock_sec": 505.5
+}

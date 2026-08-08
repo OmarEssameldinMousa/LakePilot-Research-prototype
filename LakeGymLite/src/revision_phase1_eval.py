@@ -53,8 +53,13 @@ from metrics import OfflineMetricsCollector
 
 PROTOCOLS = {
     # name: (plan_file, episodes_per_seed, steps_per_episode)
+    # Plan paths may be absolute; os.path.join then ignores the base directory.
+    # The Phase 5 generalization plans live under the mounted revision/ tree
+    # because the built-in plans are baked into the container image.
     "std1000": ("workload_plan_v5.json", 1, 1000),
     "eval500": ("workload_plan_v5_eval.json", 5, 500),
+    "drift500": ("/app/revision/phase5_generalization/workload_plan_v5_drift.json", 1, 500),
+    "mixed500": ("/app/revision/phase5_generalization/workload_plan_v5_mixed.json", 1, 500),
 }
 
 
@@ -62,6 +67,10 @@ def env_seed_for(protocol: str, slot: int, episode: int) -> int:
     """Deterministic env seed shared by every policy for the same slot/episode."""
     if protocol == "std1000":
         return 11000 + slot
+    if protocol == "drift500":
+        return 45000 + 100 * slot + episode
+    if protocol == "mixed500":
+        return 55000 + 100 * slot + episode
     return 15000 + 100 * slot + episode
 
 

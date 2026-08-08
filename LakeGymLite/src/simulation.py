@@ -245,6 +245,7 @@ class ScenarioManager:
         self._plan_name = ""
         self._ingestion_schedule: List[Dict[str, Any]] = []
         self._workload_schedule: List[Dict[str, Any]] = []
+        self._plan_meta: Dict[str, Any] = {}
 
     @property
     def is_active(self) -> bool:
@@ -263,6 +264,8 @@ class ScenarioManager:
                 self._plan_name = json_data.get('name', 'Unnamed Plan')
                 self._ingestion_schedule = json_data.get('ingestion_schedule', [])
                 self._workload_schedule = json_data.get('workload_schedule', [])
+                self._plan_meta = {k: v for k, v in json_data.items()
+                                   if k not in ('ingestion_schedule', 'workload_schedule')}
                 self._is_active = True
                 return (
                     f"✅ Loaded plan '{self._plan_name}': "
@@ -299,8 +302,65 @@ class ScenarioManager:
                 return None
             for phase in self._workload_schedule:
                 if phase['start'] <= step <= phase['end']:
-                    return phase['profile']
+                    return phase.get('profile')
             return None
+
+    def get_workload_mixture(self, step: int) -> Optional[Dict[str, float]]:
+        """Effective {profile_name: weight} for this step (revision Phase 5).
+
+        Supports three plan styles. A plan with plain {"profile": name} phases
+        behaves exactly as before — the mixture is simply {name: 1.0} — so all
+        previously collected results are unaffected.
+
+          discrete (default)  {"profile": "time_heavy"}
+          mixed               {"profiles": ["time_heavy", "region_heavy"],
+                               "weights": [0.5, 0.5]}
+          drift               top-level {"transition_steps": N}; within the last
+                              N steps of a phase the outgoing profile is blended
+                              linearly into the incoming one, so query-type
+                              probabilities move gradually instead of switching.
+        """
+        with self._lock:
+            if not self._is_active or not self._workload_schedule:
+                return None
+            sched = self._workload_schedule
+            trans = int(self._plan_meta.get('transition_steps', 0) or 0)
+
+            idx = None
+            for i, phase in enumerate(sched):
+                if phase['start'] <= step <= phase['end']:
+                    idx = i
+                    break
+            if idx is None:
+                return None
+
+            def weights_of(phase) -> Dict[str, float]:
+                if 'profiles' in phase:
+                    names = phase['profiles']
+                    ws = phase.get('weights') or [1.0 / len(names)] * len(names)
+                    total = float(sum(ws)) or 1.0
+                    out: Dict[str, float] = {}
+                    for n, w in zip(names, ws):
+                        out[n] = out.get(n, 0.0) + w / total
+                    return out
+                return {phase['profile']: 1.0}
+
+            cur = weights_of(sched[idx])
+            if trans <= 0 or idx + 1 >= len(sched):
+                return cur
+
+            # Blend into the next phase over the final `trans` steps.
+            end = sched[idx]['end']
+            if step <= end - trans:
+                return cur
+            nxt = weights_of(sched[idx + 1])
+            alpha = (step - (end - trans)) / float(trans)   # 0 -> 1 across the window
+            blended: Dict[str, float] = {}
+            for n, w in cur.items():
+                blended[n] = blended.get(n, 0.0) + (1.0 - alpha) * w
+            for n, w in nxt.items():
+                blended[n] = blended.get(n, 0.0) + alpha * w
+            return blended
 
     def clear(self):
         with self._lock:
@@ -308,6 +368,7 @@ class ScenarioManager:
             self._plan_name = ""
             self._ingestion_schedule = []
             self._workload_schedule = []
+            self._plan_meta = {}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -768,7 +829,30 @@ class LakeSimulator:
     # ─────────────────────────────────────────────────────────
 
     def _pick_query_type(self) -> QueryType:
-        """Sample a query type from the current workload profile."""
+        """Sample a query type from the current workload profile.
+
+        When the active plan specifies a mixture or a drift transition
+        (revision Phase 5), the effective distribution is the weighted sum of the
+        component profiles. A plain single-profile plan reduces to exactly the
+        previous behaviour.
+        """
+        mixture = self._scenario.get_workload_mixture(self._state.step_count)
+        if mixture and (len(mixture) > 1 or next(iter(mixture)) not in WORKLOAD_PROFILES):
+            combined: Dict[QueryType, float] = {qt: 0.0 for qt in QueryType}
+            total = 0.0
+            for name, w in mixture.items():
+                prof = WORKLOAD_PROFILES.get(name)
+                if not prof:
+                    continue
+                for qt, p in prof.items():
+                    combined[qt] += w * p
+                total += w
+            if total > 0:
+                types = list(combined.keys())
+                weights = [combined[t] for t in types]
+                if sum(weights) > 0:
+                    return random.choices(types, weights=weights, k=1)[0]
+
         with self._lock:
             profile_name = self._state.current_profile
         profile = WORKLOAD_PROFILES.get(profile_name, WORKLOAD_PROFILES["mixed"])
@@ -867,7 +951,13 @@ class LakeSimulator:
             # Determine workload profile for this step
             step = self._state.step_count
             plan_profile = self._scenario.get_workload_profile(step)
-            if plan_profile and plan_profile in WORKLOAD_PROFILES:
+            mixture = self._scenario.get_workload_mixture(step)
+            if mixture and len(mixture) > 1:
+                # log the dominant component so downstream analysis stays readable
+                with self._lock:
+                    self._state.current_profile = '+'.join(
+                        f'{n}:{w:.2f}' for n, w in sorted(mixture.items(), key=lambda x: -x[1]))
+            elif plan_profile and plan_profile in WORKLOAD_PROFILES:
                 with self._lock:
                     self._state.current_profile = plan_profile
             elif self._config.manual_profile and self._config.manual_profile in WORKLOAD_PROFILES:
