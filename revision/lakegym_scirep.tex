@@ -1,0 +1,1410 @@
+\documentclass[fleqn,10pt]{wlscirep}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{placeins}
+
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.85}
+\renewcommand{\textfraction}{0.10}
+\renewcommand{\floatpagefraction}{0.80}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{4}
+\setcounter{totalnumber}{6}
+
+% ── Colour palette ──────────────────────────────────────────────────────────
+\definecolor{agentblue}{HTML}{185FA5}
+\definecolor{agentteal}{HTML}{1D9E75}
+\definecolor{agentcoral}{HTML}{E8593C}
+
+% ── Convenience macros ──────────────────────────────────────────────────────
+\newcommand{\env}{\textsc{LakeGym~v5}}
+\newcommand{\attentive}{\texttt{AttentivePPO}}
+\newcommand{\mlpppo}{\texttt{MLP-PPO}}
+\newcommand{\ddqn}{\texttt{DDQN}}
+\newcommand{\noop}{\texttt{NOOP}}
+\newcommand{\cthirtytwo}{\texttt{COMPACT\_32KB}}
+\newcommand{\csixtyfour}{\texttt{COMPACT\_64KB}}
+\newcommand{\conehundredtwentyeight}{\texttt{COMPACT\_128KB}}
+\newcommand{\phour}{\texttt{PARTITION\_HOUR}}
+\newcommand{\pregion}{\texttt{PARTITION\_REGION}}
+\newcommand{\ptype}{\texttt{PARTITION\_EVENT\_TYPE}}
+\newcommand{\removep}{\texttt{REMOVE\_PARTITION}}
+
+% ── Title & authors ─────────────────────────────────────────────────────────
+\title{Workload-Aware Data Lakehouse Maintenance Using Hierarchical Deep
+Reinforcement Learning}
+
+\author[1,*]{Omer Karim}
+\author[1,*]{Omar Essameldin}
+\author[1]{Omar Shrief}
+\author[1,2]{Ahmed B. Zaky}
+
+\affil[1]{Department of Computer Science and Information Technology,
+  Egypt-Japan University of Science and Technology, Alexandria, Egypt}
+\affil[2]{Department of Electrical Engineering, Faculty of Engineering
+  (Shoubra), Benha University, Banha 13511, Qalubiya, Egypt}
+
+\affil[*]{These authors contributed equally to this work.}
+
+\affil[$\dagger$]{\texttt{omer.karim@ejust.edu.eg},
+\texttt{omar.isameldin@ejust.edu.eg},
+\texttt{omar.shrief@ejust.edu.eg},
+\texttt{ahmed.zaky@ejust.edu.eg}}
+\affil[$\ddagger$]{Correspondence should be addressed to O.E. 
+(\texttt{omar.isameldin@ejust.edu.eg})}
+% ── Abstract ────────────────────────────────────────────────────────────────
+\begin{abstract}
+Modern data lakehouses built on open table formats such as Apache Iceberg
+accumulate small files and suboptimal partition layouts as data is
+continuously ingested, degrading query performance over time.
+Existing maintenance strategies rely on hand-crafted, workload-agnostic
+rules that cannot adapt to shifting query distributions.
+We present a hierarchical multi-agent deep reinforcement learning (RL)
+framework that jointly optimises compaction and partitioning decisions in
+real time.
+A rule-based meta-controller evaluates per-step urgency scores and
+delegates to two specialist RL agents---a compaction agent and a
+partition agent---each trained with a separate reward signal aligned to
+its operational objective.
+We evaluate three neural architectures within this framework: an
+attention-based actor-critic (\attentive{}), a feedforward actor-critic
+(\mlpppo{}), and a dueling double DQN (\ddqn{}).
+Experiments on \env{}, a simulation environment backed by a real Iceberg
+table under a structured 1,000-step workload with five distinct query
+profiles, show that all three hierarchical RL agents outperform 17
+heuristic and workload-aware baselines.
+\attentive{} achieves the highest mean global reward (0.2201), a
+$+$4.3\% improvement over the best heuristic and $+$29.5\% over a
+compaction-only ablation.
+\ddqn{} achieves the lowest estimated cloud cost (\$8.53 per episode,
+$-$82.9\% versus no-maintenance), with query latency (323.4\,ms) nearly
+identical to \attentive{} (323.6\,ms) across the five-episode average.
+Ablation experiments confirm that compaction is a prerequisite for
+effective partitioning: a partition-only agent produces catastrophic
+file proliferation (1,245 mean files, 5,307\,ms latency).
+Adaptive online weight updates further improve \attentive{} by
+$+$20.3\% across five evaluation episodes, closing 146.9\% of the
+initial gap to its frozen ceiling, while destabilising \ddqn{}, exposing
+an important architecture-specific constraint on on-policy versus
+off-policy online adaptation.
+\end{abstract}
+
+% ════════════════════════════════════════════════════════════════════════════
+\begin{document}
+\flushbottom
+\maketitle
+\thispagestyle{empty}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Introduction}
+\label{sec:intro}
+% ════════════════════════════════════════════════════════════════════════════
+
+Data lakehouses combine the scalable storage of data lakes with the
+transactional semantics of data warehouses through open table formats
+such as Apache Iceberg\textsuperscript{1}, Delta
+Lake\textsuperscript{2}, and Apache Hudi\textsuperscript{3}.
+These formats store data as immutable Parquet files and maintain
+metadata-level transaction logs, enabling ACID semantics on object
+stores.
+However, continuous ingestion generates large numbers of small files,
+and the initial partition layout quickly becomes misaligned with the
+actual query distribution as workloads evolve, increasing query scan
+costs substantially.
+
+State-of-practice maintenance is either manual or based on periodic
+compaction schedules that are decoupled from query patterns.
+Open-source auto-compaction heuristics\textsuperscript{1} trigger on
+file-count thresholds but do not consider partition alignment.
+Workload-aware approaches such as learned index
+structures\textsuperscript{4} and automatic physical design
+tools\textsuperscript{5} address layout optimisation offline and are
+not designed for the continuous-ingestion regime of a lakehouse.
+Reinforcement learning has been applied to query
+optimisation\textsuperscript{6,7} and database
+tuning\textsuperscript{8,9}, but not to joint compaction and
+partitioning maintenance.
+
+We argue that effective lakehouse maintenance requires \emph{joint},
+\emph{online}, and \emph{workload-aware} decisions over both
+compaction and partitioning.
+This paper makes the following contributions.
+
+\begin{itemize}
+\item \textbf{Framework.} A hierarchical multi-agent RL framework with
+  a rule-based meta-controller that separates the when-to-act decision
+  from the what-to-do decision, improving interpretability and training
+  stability.
+
+\item \textbf{Environment.} \env{}, a simulation environment backed by
+  a real Apache Iceberg table on Apache Spark with a structured,
+  phase-shifting workload and a three-component reward function.
+
+\item \textbf{Architecture study.} A systematic comparison of three
+  neural architectures (\attentive{}, \mlpppo{}, \ddqn{}) in both
+  frozen and adaptive evaluation modes across 22 policies.
+
+\item \textbf{Ablation.} Controlled experiments confirming that joint
+  compaction and partitioning is non-trivially superior to either
+  sub-agent acting alone, with $+$26--33\% reward gain over
+  compaction-only and $+$221--228\% over partition-only baselines.
+\end{itemize}
+
+\FloatBarrier
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Results}
+\label{sec:results}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection*{Overall policy ranking}
+
+Table~\ref{tab:ranking} presents the mean global reward, mean latency,
+mean file count, and mean pruning ratio for all 22 evaluated policies
+on the 1,000-step standard workload.
+All three hierarchical RL agents occupy the top three positions.
+\attentive{} achieves the highest mean global reward (0.2201), followed
+by \ddqn{} (0.2196) and \mlpppo{} (0.2124).
+The best workload-aware heuristic,
+\texttt{WorkloadAwareThreshold\_v5}, ranks fourth (0.2111),
+representing a $+$4.3\% improvement for the best RL agent.
+Relative to the best pure-compaction heuristic
+(\texttt{AlwaysCompact\_C128}, reward $= 0.1869$), \attentive{}
+provides a $+$17.8\% gain.
+No-maintenance is the worst policy at $-0.1492$, confirming that
+inaction is severely penalised under continuous ingestion.
+
+\begin{table}[!htbp]
+\centering
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{clcccc}
+\toprule
+\textbf{Rank} & \textbf{Policy} & \textbf{Reward} &
+  \textbf{Latency (ms)} & \textbf{Files} & \textbf{Pruning} \\
+\midrule
+1  & \textbf{\attentive{}}           & \textbf{0.2201} & 323.6           & 54.9   & 0.191 \\
+2  & \textbf{\ddqn{}}                & 0.2196          & \textbf{323.4}  & 58.8   & 0.197 \\
+3  & \textbf{\mlpppo{}}              & 0.2124          & 387.8           & 62.7   & \textbf{0.203} \\
+4  & \texttt{WorkloadAwareThreshold} & 0.2111          & 439.9           & 93.4   & 0.285 \\
+5  & \texttt{AlwaysCompact\_C128}    & 0.1869          & 344.3           & 43.5   & 0.000 \\
+6  & \texttt{Random\_Compact}        & 0.1809          & 460.8           & 52.1   & 0.000 \\
+7  & \texttt{Threshold10\_C128}      & 0.1734          & 429.7           & 46.8   & 0.000 \\
+8  & \texttt{Periodic10\_C128}       & 0.1734          & 399.1           & 47.6   & 0.000 \\
+9  & \texttt{CompactOnly} (ablation) & 0.1699          & 344.1           & 48.9   & 0.000 \\
+10 & \texttt{PartitionExploration}   & 0.1668          & 437.2           & 90.8   & 0.138 \\
+11 & \texttt{AdaptiveCompaction}     & 0.1411          & 609.5           & 71.4   & 0.000 \\
+12 & \texttt{AlwaysCompact (C64)}    & 0.1393          & 554.0           & 88.0   & 0.000 \\
+\midrule
+21 & \texttt{No\_Maintenance}        & $-$0.1492       & 4,298.1         & 873.7  & 0.000 \\
+22 & \texttt{PartitionOnly} (ablation)& $-$0.1765      & 5,306.9         & 1,245.0 & 0.110 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:ranking}Full policy ranking. Mean global reward, mean latency (ms),
+  mean file count, and mean pruning ratio for all 22 evaluated policies
+  on the 1,000-step v5 standard workload, sorted by descending reward.
+  RL agents are shown in bold. Top-12 and bottom-2 policies shown;
+  the complete table is available as supplementary data.}
+\end{table}
+
+Figure~\ref{fig:cumreward} shows the cumulative global reward trajectory
+over 1,000 steps. The RL ensemble diverges sharply upward from all
+baselines during the burst-ingestion window (steps 301--500), where
+the ingestion rate reaches 225\,rows/step, demonstrating the agents'
+ability to recognise and respond to increased storage pressure in real
+time.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_cumreward}
+\caption{\label{fig:cumreward}\textbf{Cumulative reward race over 1,000 steps.}
+  Solid lines show the three hierarchical RL agents
+  (\attentive{} = blue, \mlpppo{} = green dashed, \ddqn{} = red/orange dashed).
+  Dashed lines show selected heuristic baselines
+  (no-maintenance = light red, always-compact = gray,
+  adaptive-compact = yellow-green, threshold10-C64 = yellow).
+  The light-blue shaded band spans the RL agent ensemble range.
+  All RL agents diverge sharply upward from heuristic baselines across
+  the full 1,000-step episode.
+  Final cumulative rewards: \attentive{} = 220.09,
+  \ddqn{} = 219.60, \mlpppo{} = 212.37 versus best heuristic = 141.05.}
+\end{figure}
+
+Figure~\ref{fig:heuristic_baseline} provides the heuristic-only
+comparison across three metrics.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_heuristic_baseline}
+\caption{\label{fig:heuristic_baseline}\textbf{Heuristic baseline comparison on the 1,000-step v5 workload.}
+  Horizontal bar charts showing mean global reward (left), mean latency
+  (middle), and mean file count (right) for all heuristic policies,
+  ranked by descending reward. \texttt{AlwaysCompact\_C128} achieves the
+  best reward (0.1869) and lowest latency (344\,ms) among all heuristics.
+  \texttt{No\_Maintenance} is the worst policy on all three metrics
+  (reward $= -0.1492$, latency $= 4{,}298$\,ms, files $= 874$).}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Three-way RL agent comparison}
+
+Table~\ref{tab:threeway} compares the three RL architectures on four
+metrics. \attentive{} achieves the best mean global reward (0.2201) and
+lowest mean file count (54.9), while \ddqn{} achieves the lowest mean
+latency (323.4\,ms), though the margin over \attentive{} (323.6\,ms) is
+negligible across the five-episode average. \mlpppo{} achieves the
+highest mean pruning ratio (0.2028) but ranks last on reward and latency.
+Step-level global reward statistics (mean $\pm$ s.d.) are
+$0.2201 \pm 0.0646$ for \attentive{}, $0.2124 \pm 0.0643$ for
+\mlpppo{}, and $0.2196 \pm 0.0650$ for \ddqn{}; the tighter standard
+deviations relative to single-episode figures represents the smoothing effect
+of the five-episode averaging.
+The pairwise reward gap between \attentive{} and \ddqn{} is $-0.0005$
+($-$0.2\%), and between \attentive{} and \mlpppo{} is $-0.0077$
+($-$3.5\%). These modest gaps, together with the distinct per-metric
+strengths of each agent (Section~\ref{sec:crossarch}), suggest that no
+single architecture dominates across all operational objectives.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Agent} & \textbf{Reward} & \textbf{Latency (ms)} &
+  \textbf{Files} & \textbf{Pruning} \\
+\midrule
+\attentive{} & $0.2201 \pm 0.0646$ & $323.6 \pm 143.3$ & $54.9 \pm 28.0$ & $0.191 \pm 0.128$ \\
+\ddqn{}      & $0.2196 \pm 0.0650$ & $323.4 \pm 142.9$ & $58.8 \pm 30.2$ & $0.197 \pm 0.137$ \\
+\mlpppo{}    & $0.2124 \pm 0.0643$ & $387.8 \pm 171.5$ & $62.7 \pm 30.9$ & $0.203 \pm 0.148$ \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:threeway}Three-way RL agent comparison. Mean global reward, mean latency
+  (ms), mean file count, and mean pruning ratio for the three frozen RL
+  agents on the 1,000-step v5 standard workload, reported as step-level
+  mean $\pm$ s.d.\ averaged over five independent episodes ($n = 5{,}000$
+  total steps per agent).}
+\end{table}
+
+Figure~\ref{fig:rlcomp} shows the four-metric comparison for all three
+agents, and Figure~\ref{fig:rl_dynamics} shows the step-by-step
+dynamics over the full 1,000-step standard workload.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.82\linewidth]{charts/fig_rlcomp}
+\caption{\label{fig:rlcomp}\textbf{Three-way RL agent comparison on the 1,000-step
+  standard workload.}
+  \textbf{(a)}~Mean global reward.
+  \textbf{(b)}~Mean query latency (ms).
+  \textbf{(c)}~Mean file count.
+  \textbf{(d)}~Mean average pruning ratio.
+  Bars use the agent colour convention: blue = \attentive{},
+  teal = \mlpppo{}, coral = \ddqn{}.
+  Value annotations are shown above each bar.
+  \attentive{} leads on reward and file management; \ddqn{} leads
+  on latency; \mlpppo{} leads on pruning ratio.}
+\end{figure}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_rl_dynamics}
+\caption{\label{fig:rl_dynamics}\textbf{Frozen RL agents --- step-by-step dynamics over the
+  1,000-step standard workload.}
+  Four panels show global reward (top-left), query latency (top-right),
+  file count (bottom-left), and average pruning ratio (bottom-right).
+  Lines use the agent colour convention:
+  \attentive{} = blue, \mlpppo{} = teal, \ddqn{} = coral. All three
+  agents maintain tightly clustered reward and latency profiles
+  throughout the workload.}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Reward decomposition}
+
+Table~\ref{tab:rewarddecomp} decomposes mean reward into its three
+components. All three RL agents are the only policies achieving a
+positive mean partition reward (0.051--0.068). All heuristic compaction
+policies produce negative partition rewards (e.g., \texttt{AlwaysCompact}:
+$-0.050$) because they never change the partition layout. The ablation
+policies confirm structural roles: \texttt{CompactOnly} achieves the
+highest compact reward (0.1855) but zero partition reward, while
+\texttt{PartitionOnly} achieves marginal partition reward ($-0.018$)
+but catastrophically negative compact reward ($-0.140$) owing to
+uncontrolled file proliferation. \ddqn{} achieves the highest partition
+reward of any agent (0.0675), suggesting its Q-value formulation may
+better exploit long-horizon pruning benefits.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Policy} & \textbf{Compact reward} &
+  \textbf{Partition reward} & \textbf{Global reward} \\
+\midrule
+No maintenance           & $-0.0851$           & $\phantom{+}0.0000$ & $-0.1492$ \\
+Always compact           & $\phantom{+}0.3608$ & $-0.0500$           & $\phantom{+}0.1393$ \\
+Adaptive compact         & $\phantom{+}0.1417$ & $-0.0428$           & $\phantom{+}0.1411$ \\
+Compact only (ablation)  & $\phantom{+}0.1855$ & $-0.0085$           & $\phantom{+}0.1699$ \\
+Partition only (ablation)& $-0.1397$           & $-0.0179$           & $-0.1765$ \\
+\attentive{}             & $\phantom{+}0.1581$ & $+0.0535$           & $\mathbf{0.2201}$ \\
+\mlpppo{}                & $\phantom{+}0.1840$ & $+0.0510$           & $0.2124$ \\
+\ddqn{}                  & $\phantom{+}0.1659$ & $\mathbf{+0.0675}$  & $0.2196$ \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:rewarddecomp}Reward decomposition. Mean compact reward, partition reward,
+  and global reward for key policies. Only the three RL agents achieve
+  positive mean partition reward.}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_reward_decomp}
+\caption{\label{fig:reward_decomp}\textbf{Reward decomposition across key policies.}
+  Bar charts showing mean compact reward (left), mean partition reward
+  (centre), and mean global reward (right) for all key policies.
+  Only the three RL agents (\attentive{}, \mlpppo{}, \ddqn{}) achieve
+  positive partition reward; all compaction heuristics yield negative
+  partition reward, and \texttt{No\_Maintenance} yields zero (no
+  partition changes are ever made).}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Compaction target size sensitivity}
+
+Table~\ref{tab:csize} shows the effect of compaction target size on
+the always-compact baseline. C32\,KB is counter-productive (1,283.0\,ms
+latency, 179.1 files) because small target files amplify the number of
+compaction operations without reducing overall file count. C128\,KB
+produces the best result (344.3\,ms, 43.5 files, reward 0.1869),
+motivating the use of \conehundredtwentyeight{} under moderate-to-high
+ingestion loads. The trained RL agents internalised this: \attentive{}
+selects \conehundredtwentyeight{} in 10.8\% of steps versus \csixtyfour{}
+in 5.0\% and \cthirtytwo{} in 2.2\%.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Target size} & \textbf{Reward} &
+  \textbf{Latency (ms)} & \textbf{Files} \\
+\midrule
+32\,KB  & 0.0393 & 1,283.0 & 179.1 \\
+64\,KB  & 0.1393 & 554.0   & 88.0  \\
+128\,KB & \textbf{0.1869} & \textbf{344.3} & \textbf{43.5} \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:csize}Compaction target size sensitivity. Mean global reward, mean
+  query latency (ms), and mean file count for the three always-compact
+  variants ($n = 1{,}000$ steps each).}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.85\linewidth]{charts/fig_csize}
+\caption{\label{fig:csize}\textbf{Compaction target size comparison --- C32 vs C64 vs C128.}
+  Rolling 20-step mean global reward (left), query latency (centre),
+  and file count (right) for the three always-compact variants over
+  1,000 steps. C128 (blue) achieves the lowest latency and file count;
+  C32 (red) produces severe file proliferation and high latency.}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Action distribution}
+
+Table~\ref{tab:actiondist} summarises action distributions of the three
+frozen agents, pooled across five independent 1,000-step episodes
+(5,000 steps per agent). All three remain predominantly idle (\noop{}:
+76.2--79.3\% of steps), confirming that selective intervention rather
+than compulsive action is a robust property that holds across runs.
+Total compaction rates are similar across agents (16.6--18.2\%) while
+partition rates are lower (4.1--5.6\%). \attentive{} still issues the
+most partition actions (5.6\% per step on average), consistent with its
+highest global reward. \ddqn{} now shows the most evenly spread
+compaction strategy across all three target sizes, while \mlpppo{}
+continues to concentrate almost exclusively on \csixtyfour{} (16.7\%).
+Figure~\ref{fig:actiondist} shows the per-agent action share plots.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Action} &
+  \multicolumn{2}{c}{\textbf{\attentive{}}} &
+  \multicolumn{2}{c}{\textbf{\mlpppo{}}} &
+  \multicolumn{2}{c}{\textbf{\ddqn{}}} \\
+  & $n$/ep & \% & $n$/ep & \% & $n$/ep & \% \\
+\midrule
+NOOP                            & 762.2 & 76.2 & 775.8 & 77.6 & 793.4 & 79.3 \\
+\texttt{COMPACT\_128KB}         & 108.2 & 10.8 &  14.2 &  1.4 &  56.4 &  5.6 \\
+\texttt{COMPACT\_64KB}          &  46.2 &  4.6 & 167.0 & 16.7 &  49.8 &  5.0 \\
+\texttt{COMPACT\_32KB}          &  27.0 &  2.7 &   0.8 &  0.1 &  59.4 &  5.9 \\
+\textit{All compaction}         & 181.4 & 18.1 & 182.0 & 18.2 & 165.6 & 16.6 \\
+\addlinespace
+\texttt{PARTITION\_REGION}      &  34.0 &  3.4 &   8.0 &  0.8 &  10.0 &  1.0 \\
+\texttt{PARTITION\_EVENT\_TYPE} &   6.4 &  0.6 &  11.0 &  1.1 &  11.2 &  1.1 \\
+\texttt{PARTITION\_HOUR}        &   6.8 &  0.7 &  10.8 &  1.1 &  11.0 &  1.1 \\
+\texttt{REMOVE\_PARTITION}      &   9.2 &  0.9 &  12.4 &  1.2 &   8.8 &  0.9 \\
+\textit{All partition}          &  56.4 &  5.6 &  42.2 &  4.2 &  41.0 &  4.1 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:actiondist}Action distribution of the three frozen RL agents pooled
+  over five independent 1,000-step episodes (5,000 steps total per agent).
+  Values show per-episode average count ($n$/ep) and percentage share.
+  All agents are predominantly idle (NOOP $> 76\%$).}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\linewidth]{charts/fig_action_attentive}
+  \caption{\attentive{}}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\linewidth]{charts/fig_action_mlpppo}
+  \caption{\mlpppo{}}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\linewidth]{charts/fig_action_ddqn}
+  \caption{\ddqn{}}
+\end{subfigure}
+\caption{\label{fig:actiondist}\textbf{Action distributions of the three frozen RL agents
+  (5 episodes, 5,000 steps each).}
+  Horizontal bar charts showing the per-episode average share of each
+  action type. All agents are predominantly idle (NOOP $> 76\%$).
+  \attentive{} issues the most partition actions (5.6\%); \mlpppo{}
+  concentrates almost entirely on \csixtyfour{} (16.7\%); \ddqn{}
+  spreads compaction evenly across all three target sizes.}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Frozen agent consistency}
+\label{sec:consistency}
+
+To assess run-to-run reliability, each frozen agent was evaluated over
+five independent 500-step episodes on the compressed evaluation workload.
+Table~\ref{tab:consistency} reports the coefficient of variation (CV)
+across episodes for each agent and metric.
+\attentive{} is the most consistent agent: reward CV $= 5.86\%$,
+latency CV $= 2.33\%$, file count CV $= 2.40\%$.
+\mlpppo{} now shows moderate variance on reward (CV $= 6.99\%$) and,
+with the corrected 500-step data, a much tighter latency spread
+(CV $= 3.24\%$, mean 258.4\,ms) --- the earlier single-episode anomaly
+at 428.8\,ms no longer inflates the variance figure.
+\ddqn{} occupies an intermediate position (reward CV $= 6.38\%$,
+latency CV $= 6.73\%$).
+Pruning ratio remains the most variable metric across all agents
+(CV $= 18$--25\%), reflecting the inherent stochasticity of
+workload-phase pruning opportunities.
+Figure~\ref{fig:frozenconsist} shows the per-episode trajectories.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+& \multicolumn{2}{c}{\textbf{\attentive{}}} &
+  \multicolumn{2}{c}{\textbf{\mlpppo{}}} &
+  \multicolumn{2}{c}{\textbf{\ddqn{}}} \\
+\textbf{Metric} & Mean & CV & Mean & CV & Mean & CV \\
+\midrule
+Global reward & 0.2182 & 5.86\%  & 0.1991 &  6.99\% & 0.2065 &  6.38\% \\
+Latency (ms)  & 190.3  & 2.33\%  & 258.4  &  3.24\% & 246.2  &  6.73\% \\
+File count    & 31.8   & 2.40\%  & 37.2   &  2.88\% & 35.2   &  3.28\% \\
+Pruning ratio & 0.214  & 18.26\% & 0.191  & 24.80\% & 0.193  & 24.70\% \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:consistency}Frozen agent consistency across five evaluation episodes
+  ($n = 500$ steps each). CV = coefficient of variation
+  (s.d.$/$ mean $\times 100\%$); lower values indicate higher consistency.}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_frozen_consistency}
+\caption{\label{fig:frozenconsist}\textbf{Frozen agents --- mean metric per evaluation episode
+  (500-step workload, 5 episodes).}
+  Mean global reward, mean query latency, mean file count, and mean
+  pruning ratio per episode for the three frozen agents.
+  Lines use the agent colour convention: \attentive{} = blue,
+  \mlpppo{} = teal, \ddqn{} = coral.
+  \attentive{} shows the tightest clustering on reward (CV = 5.86\%),
+  latency (CV = 2.33\%), and file count (CV = 2.40\%).}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Adaptive online learning}
+\label{sec:adaptive}
+
+Table~\ref{tab:adaptive} reports the episode-over-episode reward
+progression for the adaptive variants of all three agents.
+\attentive{} shows a strong upward trend from 0.1934 (episode~1) to 0.2326
+(episode~5), a total gain of $+0.0393$ ($+$20.3\%), with a brief dip at
+episode~4 (0.2149) before recovering.
+By episode~5, the adaptive agent \emph{exceeds} its own frozen ceiling
+(0.2201) by 0.0125, closing 146.9\% of the initial gap --- a stronger
+result than the single-episode comparison suggested, since the averaged
+ceiling sits somewhat lower and the adaptive trajectory is unchanged.
+\mlpppo{} shows modest improvement ($+$4.9\%), closing 75.1\% of its
+gap to the updated frozen ceiling (0.2124). In contrast, \ddqn{} degrades
+from 0.2181 to 0.1696 ($-$22.2\%), peaking at episode~3 (0.2298) before
+collapsing---a hallmark of replay-buffer instability in off-policy online
+adaptation.
+Inspection of \ddqn{}'s adaptive action distribution reveals increasing
+compaction frequency (from 16.4\% to 20.8\%) concurrent with reward
+degradation, suggesting the replay buffer reinforces over-compact
+behaviour once encountered. Figure~\ref{fig:adaptive} shows the
+reward convergence curves with frozen-ceiling reference lines.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{Agent} & \textbf{Ep 1} & \textbf{Ep 2} & \textbf{Ep 3} &
+  \textbf{Ep 4} & \textbf{Ep 5} & \textbf{Gain} &
+  \textbf{Ceiling} & \textbf{\% gap closed} \\
+\midrule
+\attentive{} & 0.1934 & 0.2017 & 0.2226 & 0.2149 & 0.2326 &
+  $+$20.3\% & 0.2201 & 146.9\% \\
+\mlpppo{}    & 0.1994 & 0.2018 & 0.1818 & 0.1939 & 0.2091 &
+  $+$4.9\%  & 0.2124 & 75.1\%  \\
+\ddqn{}      & 0.2181 & 0.2133 & 0.2298 & 0.2047 & 0.1696 &
+  $-$22.2\% & 0.2196 & $-$3,207\% \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:adaptive}Adaptive online learning. Mean global reward per episode
+  for the three adaptive agents ($n = 500$ steps each). ``Gain'' reports
+  the relative change from episode~1 to episode~5. ``\% gap closed''
+  measures progress toward the five-episode-averaged frozen ceiling;
+  values above 100\% indicate the adaptive agent exceeded its frozen ceiling.}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_adaptive_episodes}
+\caption{\label{fig:adaptive}\textbf{Adaptive agents --- mean metric per episode (online
+  learning, 500-step workload).}
+  Mean global reward, mean query latency, mean file count, and mean
+  pruning ratio per episode for the three adaptive agents.
+  \attentive{} (blue) shows a strong upward trend overall, rising from
+  0.1934 (episode~1) to 0.2326 (episode~5) with a brief dip at
+  episode~4, and ultimately exceeds its frozen ceiling ($+$20.3\%).
+  \mlpppo{} (teal) shows modest improvement ($+$4.9\%).
+  \ddqn{} (coral) peaks at episode~3 then degrades sharply to $-$22.2\%,
+  indicating replay-buffer instability under online adaptation.}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Frozen versus adaptive comparison}
+
+Table~\ref{tab:fva} shows the per-episode reward comparison between
+frozen and adaptive modes for each architecture.
+For \attentive{}, the adaptive agent underperforms frozen in episodes
+1--3 (by $-$11.9\% to $-$4.9\%) but surpasses it in episodes 4--5
+($+$9.4\% and $+$2.5\%), indicating a necessary warm-up period before
+online learning converges.
+For \mlpppo{}, the adaptive agent outperforms frozen in episode~1
+($+$1.1\%) but underperforms in 3 of the remaining 4 episodes,
+suggesting the feedforward architecture still learns slowly from
+online gradient updates overall.
+For \ddqn{}, the adaptive agent outperforms frozen in episodes 1--3 but
+collapses in episode~5 ($-$18.9\%), confirming that off-policy
+replay-buffer adaptation is unsuitable for the non-stationary evaluation
+environment. These results collectively indicate that \textbf{frozen
+weights are preferred for deployment}, and online adaptation should be
+restricted to on-policy architectures such as \attentive{}.
+
+\begin{table}[!htbp]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Agent} & \textbf{Mode} & \textbf{Ep 1} & \textbf{Ep 2} &
+  \textbf{Ep 3} & \textbf{Ep 4} & \textbf{Ep 5} \\
+\midrule
+\multirow{3}{*}{\attentive{}}
+  & Frozen     & 0.2194     & 0.2144    & 0.2340     & 0.1964     & 0.2270 \\
+  & Adaptive   & 0.1934     & 0.2017    & 0.2226     & 0.2149     & 0.2326 \\
+  & $\Delta\%$ & $-$11.9    & $-$5.9    & $-$4.9     & $+$9.4     & $+$2.5 \\
+\midrule
+\multirow{3}{*}{\mlpppo{}}
+  & Frozen     & 0.1972     & 0.2093    & 0.1867     & 0.1825     & 0.2198 \\
+  & Adaptive   & 0.1994     & 0.2018    & 0.1818     & 0.1939     & 0.2091 \\
+  & $\Delta\%$ & $+$1.1     & $-$3.6    & $-$2.6     & $+$6.2     & $-$4.9 \\
+\midrule
+\multirow{3}{*}{\ddqn{}}
+  & Frozen     & 0.2165     & 0.1823    & 0.2195     & 0.2047     & 0.2092 \\
+  & Adaptive   & 0.2181     & 0.2133    & 0.2298     & 0.2047     & 0.1696 \\
+  & $\Delta\%$ & $+$0.7     & $+$17.0   & $+$4.7     & 0.0        & $-$18.9 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:fva}Frozen versus adaptive comparison. Per-episode reward for frozen
+  and adaptive modes with relative differences $\Delta\%$ (adaptive
+  minus frozen).}
+\end{table}
+
+\FloatBarrier
+
+\subsection*{Cross-architecture analysis}
+\label{sec:crossarch}
+
+Table~\ref{tab:normalised} presents normalised performance scores
+(higher always better; latency and file count inverted and normalised
+to [0,~1]).
+No architecture is Pareto-dominant, though the five-episode averages
+reveal a considerably tighter cluster than single-run figures suggested.
+\attentive{} leads on global reward (1.000) and file efficiency (1.000);
+\ddqn{} leads on latency (1.000, just 0.2\,ms faster than \attentive{})
+and achieves a mid-range pruning score (0.475); \mlpppo{} leads on
+pruning ratio (1.000) but trails on both reward and latency.
+This complementary profile suggests that architecture selection should
+be driven by operational priority: \attentive{} for balanced
+optimisation, and \mlpppo{} where partition alignment is the primary concern.
+Figure~\ref{fig:rl_vs_baselines} shows the full four-metric profile
+across all agent and baseline categories.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{\attentive{}} &
+  \textbf{\mlpppo{}} & \textbf{\ddqn{}} \\
+\midrule
+Global reward (higher = better)       & \textbf{1.000} & 0.000          & 0.935 \\
+Latency, inverted (lower = better)    & 0.997          & 0.000          & \textbf{1.000} \\
+File count, inverted (lower = better) & \textbf{1.000} & 0.000          & 0.507 \\
+Pruning ratio (higher = better)       & 0.000          & \textbf{1.000} & 0.475 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:normalised}Normalised cross-architecture performance. Each metric is
+  normalised to $[0, 1]$ within the three-agent cohort using five-episode
+  averaged values; latency and file count are inverted so that higher is
+  always better.}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.92\linewidth]{charts/fig_rl_vs_baselines}
+\caption{\label{fig:rl_vs_baselines}\textbf{RL agents vs baselines --- four-metric profile
+  on the 1,000-step standard workload.}
+  Mean global reward \textbf{(a)}, mean query latency \textbf{(b)},
+  mean file count \textbf{(c)}, and mean pruning ratio \textbf{(d)}
+  for selected baselines, ablations, and the three RL agents.
+  The RL agents (starred) uniformly occupy the top positions on reward
+  while achieving competitive latency and file-count metrics.
+  PartitionOnly is an extreme outlier on latency (5,307\,ms) and
+  file count (1,245).}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Ablation study}
+\label{sec:ablation}
+
+Table~\ref{tab:ablation} compares compaction-only and partition-only
+single-agent ablations against all three full multi-agent RL systems.
+All ablation agents use the \attentive{} architecture restricted to the
+relevant action sub-space.
+\texttt{CompactOnly} achieves a reasonable reward (0.1699) and low
+latency (344.1\,ms) but zero pruning ratio, confirming compaction alone
+cannot adapt query performance to workload characteristics.
+\texttt{PartitionOnly} is catastrophic: mean file count 1,245, mean
+latency 5,307\,ms, and reward $-0.1765$.
+Without compaction, continuous ingestion generates files faster than
+any partition repartitioning can reduce them.
+This confirms that \textbf{compaction is a prerequisite for effective
+partitioning}.
+The full multi-agent systems outperform \texttt{CompactOnly} by
+$+$25.0--29.5\% and \texttt{PartitionOnly} by $+$220.3--224.7\%.
+These gains are non-additive: the meta-controller's joint coordination
+provides a synergistic benefit not captured by either sub-agent
+independently.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Policy} & \textbf{Reward} & \textbf{Latency (ms)} &
+  \textbf{Files} & \textbf{Pruning} \\
+\midrule
+\texttt{CompactOnly}    & $\phantom{-}0.1699$ & $\phantom{5,}344.1$ &
+  $\phantom{1,}48.9$ & 0.000 \\
+\texttt{PartitionOnly}  & $-0.1765$           & $5{,}306.9$ &
+  $1{,}245.0$ & 0.110 \\
+\midrule
+\attentive{} & $\mathbf{0.2201}$ & $323.6$ & $54.9$ & $0.191$ \\
+\mlpppo{}    & $0.2124$          & $387.8$ & $62.7$ & $0.203$ \\
+\ddqn{}      & $0.2196$          & $323.4$ & $58.8$ & $0.197$ \\
+\midrule
+Gain vs.\ \texttt{CompactOnly}: &&&& \\
+\quad \attentive{} & $+$29.5\% &&& \\
+\quad \mlpppo{}    & $+$25.0\% &&& \\
+\quad \ddqn{}      & $+$29.3\% &&& \\
+Gain vs.\ \texttt{PartitionOnly}: &&&& \\
+\quad \attentive{} & $+$224.7\% &&& \\
+\quad \mlpppo{}    & $+$220.3\% &&& \\
+\quad \ddqn{}      & $+$224.4\% &&& \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:ablation}Ablation study. Compaction-only and partition-only
+  single-agent ablations (using the \attentive{} policy restricted to
+  the relevant action sub-space) compared against the three full
+  multi-agent RL systems. Per cent gain is relative to each ablation baseline.}
+\end{table}
+
+\FloatBarrier
+
+\subsection*{Commercial cost analysis}
+
+Table~\ref{tab:cost} presents estimated per-episode cloud costs.
+The no-maintenance policy is dominated by query cost (\$42.98 of
+\$49.86 total) due to high latency (4,298\,ms mean).
+Always-compact policies reduce query cost but incur \$5.00 compaction
+overhead, yielding \$15.17 ($-$69.6\%).
+The three RL agents achieve the lowest totals: \ddqn{} at \$8.53
+($-$82.9\%), \attentive{} at \$8.60 ($-$82.8\%), and \mlpppo{} at
+\$9.32 ($-$81.3\%).
+RL agents' savings are driven primarily by latency reduction (low query
+cost); their compaction costs (\$0.83--\$0.91) are $5\times$ lower
+than always-compact policies, reflecting the five-episode-averaged op
+counts rather than a single run.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Policy} & \textbf{Query (\$)} & \textbf{Compact (\$)} &
+  \textbf{Storage (\$)} & \textbf{Total (\$)} & \textbf{Saving} \\
+\midrule
+No maintenance   & 42.98 & 0.00 & 6.88 & 49.86 & --- \\
+Always compact   &  5.54 & 5.00 & 4.63 & 15.17 & $-$69.6\% \\
+Adaptive compact &  6.10 & 4.51 & 4.56 & 15.17 & $-$69.6\% \\
+\attentive{}     &  3.24 & 0.91 & 4.45 &  8.60 & $-$82.8\% \\
+\mlpppo{}        &  3.88 & 0.91 & 4.53 &  9.32 & $-$81.3\% \\
+\ddqn{}          & \textbf{3.23} & \textbf{0.83} & 4.47 &
+  \textbf{8.53} & $\mathbf{-82.9\%}$ \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:cost}Estimated cloud cost breakdown per 1,000-step evaluation
+  episode. Cost model: query at \$0.01 per 1,000\,ms; compaction at
+  \$0.005 per operation; storage at \$0.001 per MB-step. RL compaction
+  counts are averaged over five independent episodes. Savings are
+  relative to no-maintenance (\$49.86).}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.80\linewidth]{charts/fig_cost}
+\caption{\label{fig:cost}\textbf{Estimated cloud cost breakdown per evaluation episode.}
+  Stacked bars show query cost (red), compaction cost (teal), and
+  storage cost (purple) for six policies. Total cost annotations appear
+  above each bar; percentage savings relative to no-maintenance appear
+  below. No-maintenance is dominated by query cost (\$42.98 of \$49.86).
+  Always-compact reduces query cost but incurs \$5.00 compaction
+  overhead. The three RL agents achieve the lowest totals
+  (\$8.53--\$9.32, savings of 81--83\%) primarily through latency
+  reduction rather than minimising compaction operations.}
+\end{figure}
+
+\FloatBarrier
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Discussion}
+\label{sec:discussion}
+% ════════════════════════════════════════════════════════════════════════════
+
+Our results establish that hierarchical deep RL is an effective and
+practical approach to workload-aware lakehouse maintenance.
+
+\textbf{Joint control is essential.}
+The $+$224\% reward improvement over \texttt{PartitionOnly} and the
+$+$29\% improvement over \texttt{CompactOnly} demonstrate that
+compaction and partitioning are complementary operations whose benefits
+are only fully realised in combination. A storage layout optimised for
+query pruning cannot be sustained without concurrent compaction to
+prevent file proliferation.
+
+\textbf{The attention mechanism provides consistent advantages.}
+\attentive{} outperforms \mlpppo{} by $+$3.5\% reward and exhibits
+lower per-episode variance on the primary metrics (reward CV 5.86\%
+versus 6.99\%, latency CV 2.33\% versus 3.24\%). The self-attention encoder's
+ability to weight recent observations differentially is advantageous in
+the non-stationary workload environment where query profile transitions
+demand rapid policy adaptation.
+
+\textbf{Architecture-dependent online adaptation.}
+The contrasting adaptive behaviour of \attentive{} ($+$20.3\%) and
+\ddqn{} ($-$22.2\%) reveals a fundamental constraint: off-policy
+algorithms with experience replay are ill-suited to online adaptation in
+a non-stationary environment. When the replay buffer is populated with
+transitions from a non-representative initial policy, off-policy gradient
+updates reinforce suboptimal behaviours. This finding has practical
+implications: frozen weights are robust across architectures, while
+online fine-tuning should be restricted to on-policy methods.
+
+\textbf{Rule-based meta-control is sufficient for arbitration.}
+The interpretable meta-controller, using simple piecewise-linear urgency
+scoring, consistently delegates to the correct specialist. This improves
+training stability (specialists receive focused reward signals) and
+system transparency (urgency scores can be logged and audited). The
+4-step compaction cooldown and 20-step partition cooldown prevent action
+thrashing without requiring learned coordination.
+
+\textbf{Limitations.}
+The current evaluation is limited to a single table schema and five
+query profiles. The cost model uses fixed per-operation prices that may
+not reflect cloud provider variability. The RL agents were trained on the
+v5 standard workload and evaluated on a compressed version;
+generalisation to substantially different workloads (e.g., append-only,
+deletion-heavy) has not been tested. Training time and compute
+requirements for the three architectures are not reported here and
+constitute future work.
+
+\FloatBarrier
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Methods}
+\label{sec:methods}
+% ════════════════════════════════════════════════════════════════════════════
+
+\subsection*{The LakeGym v5 environment}
+
+\env{} simulates a production data lakehouse backed by a real Apache
+Iceberg table managed via PySpark. Each discrete time step executes:
+(i)~ingest a batch of rows into the Iceberg table,
+(ii)~the active policy selects one of eight discrete actions,
+(iii)~a query is drawn from the current workload profile and executed,
+(iv)~three reward signals are computed, and
+(v)~an observation vector is constructed.
+
+\textbf{Table schema.}
+The table contains eight columns: \texttt{device\_id} (string),
+\texttt{timestamp} (timestamp), \texttt{temperature} (double),
+\texttt{humidity} (double), \texttt{region} (string),
+\texttt{event\_type} (string), \texttt{sensor\_value} (double),
+and \texttt{payload} (string, length~100). Each row occupies
+approximately 200~bytes; the target file size is 64\,KB, corresponding
+to roughly 50~rows per Parquet file.
+
+\textbf{Action space.}
+The joint action space consists of eight discrete actions
+(Table~\ref{tab:actions}). Compaction actions (\cthirtytwo{},
+\csixtyfour{}, \conehundredtwentyeight{}) rewrite small files into
+consolidated Parquet files of the specified target size. Partition
+actions (\phour{}, \pregion{}, \ptype{}, \removep{}) change the Iceberg
+partition specification. \noop{} takes no maintenance action.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Action} & \textbf{Type} & \textbf{Cost} \\
+\midrule
+\texttt{NOOP}                   & ---        & 0.0 \\
+\texttt{COMPACT\_32KB}          & Compaction & 0.9 \\
+\texttt{COMPACT\_64KB}          & Compaction & 1.0 \\
+\texttt{COMPACT\_128KB}         & Compaction & 1.1 \\
+\texttt{PARTITION\_HOUR}        & Partition  & 2.0 \\
+\texttt{PARTITION\_REGION}      & Partition  & 2.0 \\
+\texttt{PARTITION\_EVENT\_TYPE} & Partition  & 2.0 \\
+\texttt{REMOVE\_PARTITION}      & Partition  & 0.7 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:actions}Action space. All eight discrete actions available to the
+  joint agent with their associated normalised cost used in the reward
+  function.}
+\end{table}
+
+\textbf{Observation space.}
+The observation vector at step $t$ includes: file count $f_t$, block
+utilisation $u_t$, rows ingested $r_t$, partition pruning ratio $p_t$,
+running average pruning ratio $\bar{p}_t$, partition skew $s_t$, query
+latency $\ell_t$, query type history fractions (five values), steps
+since last compaction $\delta_c$, and steps since last partition change
+$\delta_p$.
+
+\textbf{Workload plans.}
+The v5 standard workload runs for 1,000 steps divided into five equal
+query-profile phases of 199~steps each
+(\texttt{time\_heavy}\,$\to$\,\texttt{region\_heavy}\,$\to$\,\texttt{mixed}\,$\to$\,\texttt{type\_heavy}\,$\to$\,\texttt{scan\_heavy}).
+Each profile specifies query-type probabilities over five templates
+(Table~\ref{tab:profiles}). Ingestion rate follows six phases:
+warm-up (40~rows/step, steps 1--100), normal load (75, steps 101--300),
+burst (225, steps 301--500), recovery (55, steps 501--700),
+normal load 2 (75, steps 701--900), and wind-down (35, steps 901--1,000).
+The v5 eval workload is a 2$\times$-compressed version (500 steps) used
+for multi-episode consistency and adaptation experiments.
+Figure~\ref{fig:workload} illustrates both workload plans.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Profile} & \textbf{Time range} & \textbf{Region filter} &
+  \textbf{Sensor lookup} & \textbf{Type filter} & \textbf{Full scan} \\
+\midrule
+\texttt{time\_heavy}   & \textbf{0.60} & 0.10 & 0.10 & 0.10 & 0.10 \\
+\texttt{region\_heavy} & 0.10 & \textbf{0.60} & 0.10 & 0.10 & 0.10 \\
+\texttt{mixed}         & 0.20 & 0.20          & 0.20 & 0.20 & 0.20 \\
+\texttt{type\_heavy}   & 0.10 & 0.10          & 0.10 & \textbf{0.60} & 0.10 \\
+\texttt{scan\_heavy}   & 0.10 & 0.10          & 0.10 & 0.10 & \textbf{0.60} \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:profiles}Query workload profiles. Each profile specifies the sampling
+  probability for each of five query templates. The dominant query type
+  is shown in bold for focused profiles.}
+\end{table}
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.85\textwidth]{charts/fig_workload_ingestion}
+  \caption{\label{fig:workload}\textbf{Ingestion rate schedule (rows/step).}
+  Shaded bands show the min--max range. The burst phase reaches 225~rows/step.}
+\end{figure}
+
+\FloatBarrier
+
+\textbf{Pruning matrix.}
+File pruning at query time depends on the alignment between the current
+partition strategy and the query predicate (Table~\ref{tab:pruning}).
+\texttt{TIME\_RANGE} queries prune 92\% of files when
+\texttt{HOUR}-partitioned, the highest pruning ratio in the environment.
+\texttt{FULL\_SCAN} is irreducible at 0\% under all strategies.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Query type} & \textbf{Hour} & \textbf{Region} &
+  \textbf{Event type} & \textbf{None} \\
+\midrule
+Time range    & \textbf{0.92} & ---           & ---           & --- \\
+Sensor lookup & \textbf{0.75} & ---           & ---           & --- \\
+Region filter & ---           & \textbf{0.67} & ---           & --- \\
+Type filter   & ---           & ---           & \textbf{0.67} & --- \\
+Full scan     & ---           & ---           & ---           & --- \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:pruning}Partition pruning matrix. Fraction of Parquet files skipped
+  at query time for each query--partition combination. Dashes indicate
+  zero pruning. Only semantically aligned pairs achieve non-zero pruning.}
+\end{table}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.55\linewidth]{charts/fig_pruning_matrix}
+\caption{\label{fig:pruning}\textbf{Partition pruning matrix.}
+  Fraction of Parquet files skipped at query time for each
+  query-type--partition-strategy combination. Cell colour encodes the
+  pruning ratio (white~$= 0$, deep navy~$= 1$); dashes indicate zero
+  pruning. Time-range queries achieve the highest pruning (92\%) under
+  hourly partitioning; full-scan queries are irreducible under all
+  strategies.}
+\end{figure}
+
+\FloatBarrier
+
+\subsection*{Reward function}
+
+The reward function comprises three independently computed signals.
+
+\textbf{Compact reward} (Eq.~\ref{eq:compact}):
+\begin{equation}
+r_c = -w_f \tilde{f} + w_u u - w_c \tilde{a}_c + w_\tau \tau(a, r),
+\label{eq:compact}
+\end{equation}
+where $\tilde{f} = \min(f / F_{\max}, 1)$, $u$ is block utilisation,
+$\tilde{a}_c$ is the normalised compaction action cost, and
+$\tau(a, r)$ is the target-size bonus depending on action $a$ and
+ingestion rate $r$. Weights: $w_f = 0.25$, $w_u = 0.20$,
+$w_c = 0.10$, $w_\tau = 0.45$.
+
+\textbf{Partition reward} (Eq.~\ref{eq:partition}):
+\begin{equation}
+r_p = w_p p + w_{\Delta p} \Delta p - w_s \tilde{s}
+    - w_{cp} \tilde{a}_p,
+\label{eq:partition}
+\end{equation}
+where $p$ is the current partition pruning ratio,
+$\Delta p = \bar{p}_t - \bar{p}_{t-1}$ is the pruning improvement,
+$\tilde{s}$ is normalised partition skew, and $\tilde{a}_p$ is the
+normalised partition action cost. Weights: $w_p = 0.55$,
+$w_{\Delta p} = 0.25$, $w_s = 0.10$, $w_{cp} = 0.10$.
+
+\textbf{Global reward} (Eq.~\ref{eq:global}):
+\begin{equation}
+r_g = -w_\ell \tilde{\ell} - w_f \tilde{f} + w_p p + w_u u,
+\label{eq:global}
+\end{equation}
+where $\tilde{\ell} = \min(\ell / L_{\max}, 1)$ with
+$L_{\max} = 15{,}000$\,ms. Weights: $w_\ell = 0.30$, $w_f = 0.20$,
+$w_p = 0.30$, $w_u = 0.20$. The global reward is the primary
+optimisation target; compact and partition rewards serve as dedicated
+training signals for the respective specialist agents.
+
+\FloatBarrier
+
+\subsection*{Hierarchical multi-agent architecture}
+
+The framework comprises three tiers: the \env{} environment, a
+rule-based meta-controller, and two specialist RL agents coordinated
+through a shared model registry (Figure~\ref{fig:architecture}).
+The three candidate neural architectures plugged into this registry
+are compared in Figure~\ref{fig:arch_models}.
+
+\textbf{Meta-controller.}
+The meta-controller (implemented in \texttt{meta\_controller.py})
+computes two urgency scores at each step:
+\begin{equation}
+\delta = \begin{cases}
+\text{COMPACTION} & \text{if } u_c \geq u_p \geq \theta \\
+\text{PARTITION}  & \text{if } u_p > u_c \geq \theta \\
+\text{NOOP}       & \text{otherwise,}
+\end{cases}
+\end{equation}
+where $\theta = 0.35$ is the minimum urgency threshold.
+
+Compaction urgency $u_c$ is a piecewise-linear function of file count $f$:
+\begin{equation}
+u_c(f) = \begin{cases}
+0.95 & f \geq 96 \\[2pt]
+0.60 + 0.35 \cdot \dfrac{f - 36}{60} & 36 \leq f < 96 \\[6pt]
+0.10 + 0.50 \cdot \dfrac{f - 12}{24} & 12 \leq f < 36 \\[2pt]
+0    & f < 12,
+\end{cases}
+\end{equation}
+with a $+$0.15 boost when block utilisation falls below 0.55.
+A 4-step cooldown prevents repeated compaction.
+
+Partition urgency $u_p$ accumulates from three signals: $+$0.40 if
+$\bar{p} < 0.25$, $+$0.30 if the dominant query type fraction exceeds
+0.45 (focused workload), and $+$0.10 if the partition layout has not
+changed for more than 100 steps. A 20-step cooldown prevents partition
+thrashing. Urgency is zeroed if $\bar{p} > 0.50$.
+
+\textbf{Neural architectures.}
+All architectures accept input of shape $(\text{batch}, W, F)$ and
+return $(\boldsymbol{\pi}, V)$: a softmax action-probability vector
+and a scalar state-value estimate
+(implemented in \texttt{model\_registry.py}).
+
+\textit{\attentive{}} uses a Transformer-style
+encoder\textsuperscript{10}:
+input $\to$ Dense(64, ReLU) + trainable positional encoding
+$\to$ multi-head self-attention (4 heads, key dimension 64,
+dropout 0.1) + residual + LayerNorm
+$\to$ FFN (128$\to$64, ReLU, dropout 0.1) + residual + LayerNorm
+$\to$ global average pooling $\to$ actor Dense($N_a$, softmax) and
+critic Dense(1). Window size $W = 10$, $F = 8$ (compaction) or
+$F = 14$ (partition).
+
+\textit{\mlpppo{}} is a feedforward actor-critic:
+input $\to$ Flatten $\to$ Dense(256, ReLU) $\to$ Dense(128, ReLU)
+$\to$ Dropout(0.1); actor: Dense(64, ReLU) $\to$ Dense($N_a$, softmax);
+critic: Dense(64, ReLU) $\to$ Dense(1).
+Window size $W = 10$ (compaction) or $W = 20$ (partition).
+
+\textit{\ddqn{}} is a dueling double DQN\textsuperscript{11}:
+input $\to$ Flatten $\to$ Dense(256, ReLU) $\to$ BatchNorm $\to$
+Dense(128, ReLU) $\to$ BatchNorm; value stream: Dense(64, ReLU) $\to$
+$V(s)$; advantage stream: Dense(64, ReLU) $\to$ $A(s,a)$;
+$Q(s,a) = V(s) + A(s,a) - \overline{A}(s)$.
+Action probabilities are computed as $\text{softmax}(Q)$ for API
+uniformity. The model uses an experience replay buffer during training.
+
+Figure~\ref{fig:arch_models} provides a side-by-side comparison of the
+three neural architectures sharing a common input--output interface.
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[t]{0.47\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{charts/fig_arch_system}
+    \caption{\textbf{Multi-agent system flow.}
+    A logic-driven hierarchy where the meta-controller manages specialist
+    delegation based on urgency scores.}
+    \label{fig:architecture}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[t]{0.47\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{charts/fig_arch_models}
+    \caption{\textbf{Neural candidate comparison.}
+    An overview of the different structural paradigms---Attention, MLP,
+    and Dueling---evaluated for state-value estimation.}
+    \label{fig:arch_models}
+  \end{subfigure}
+  \caption{System architecture and neural model comparison.}
+  \label{fig:both}
+\end{figure}
+
+\FloatBarrier
+
+\textbf{Training.}
+Agents are trained as multi-agent systems: a single meta-controller
+coordinates the compaction specialist (4 actions; $W = 10$, $F = 8$)
+and the partition specialist (5 actions; $W = 20$, $F = 14$). Frozen
+evaluation fixes all network weights during rollout. Adaptive evaluation
+applies online weight updates using PPO for \attentive{} and \mlpppo{},
+and online DQN updates for \ddqn{}.
+
+\FloatBarrier
+
+\subsection*{Baseline policies}
+
+We evaluate 14 heuristic compaction policies, 3 workload-aware
+heuristics, and 2 ablation policies (Table~\ref{tab:baselines}).
+Heuristic policies include always-compact variants (C32, C64, C128),
+periodic compaction (every 5 or 10 steps), threshold-triggered
+compaction (file count $> 10$ or $> 20$), random compaction, and
+adaptive compaction (frequency proportional to file growth rate).
+Workload-aware heuristics include \texttt{WorkloadAwareThreshold\_v5},
+\texttt{PartitionExploration\_v5}, and \texttt{Random\_Partition\_v5}.
+Ablation policies (\texttt{CompactOnly}, \texttt{PartitionOnly}) use
+the \attentive{} architecture restricted to the relevant action
+sub-space.
+
+\begin{table}[!htbp]
+\centering
+\renewcommand{\arraystretch}{0.85}
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{Policy} & \textbf{Description} \\
+\midrule
+\texttt{No\_Maintenance}          & Takes no action at any step \\
+\texttt{AlwaysCompact}            & Compacts every step with \texttt{64KB} \\
+\texttt{AlwaysCompact\_C32}       & Compacts every step with \texttt{32KB} \\
+\texttt{AlwaysCompact\_C128}      & Compacts every step with \texttt{128KB} \\
+\texttt{Periodic5\_C64}           & Compacts every 5 steps with \texttt{64KB} \\
+\texttt{Periodic10\_C64}          & Compacts every 10 steps with \texttt{64KB} \\
+\texttt{Periodic10\_C32}          & Compacts every 10 steps with \texttt{32KB} \\
+\texttt{Periodic10\_C128}         & Compacts every 10 steps with \texttt{128KB} \\
+\texttt{Threshold10\_C32}         & Compaction for file count $> 10$ (\texttt{32KB}) \\
+\texttt{Threshold10\_C64}         & Compaction for file count $> 10$ (\texttt{64KB}) \\
+\texttt{Threshold10\_C128}        & Compaction for file count $> 10$ (\texttt{128KB}) \\
+\texttt{Threshold20\_C64}         & Compaction for file count $> 20$ (\texttt{64KB}) \\
+\texttt{Random\_Compact}          & Uniformly samples a compaction action \\
+\texttt{AdaptiveCompaction}       & Proportional frequency based on file growth \\
+\midrule
+\texttt{WorkloadAwareThreshold}   & Dual-aware thresholding and partitioning \\
+\texttt{PartitionExploration}     & Sequential cycle of partitioning strategies \\
+\texttt{Random\_Partition}        & Uniformly samples a partition action \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:baselines}\textbf{Heuristic baseline strategies.} This table
+details the fourteen rule-based compaction methods and three workload-aware benchmarks
+used for comparative analysis. These static policies provide a foundational performance
+floor for evaluating the efficacy of our adaptive models.}
+\end{table}
+
+\FloatBarrier
+
+\subsection*{Evaluation protocol}
+
+\textbf{Standard evaluation.}
+Each policy is evaluated on the 1,000-step v5 standard workload.
+For RL agents, frozen weights from the final training checkpoint are
+used. Rewards are recalculated post-hoc for heuristic baselines using
+the v5 reward function to ensure comparability.
+
+\textbf{Multi-episode evaluation.}
+Each RL agent is evaluated over five independent 500-step episodes on
+the v5 eval workload. The coefficient of variation (CV) across episodes
+quantifies run-to-run reliability.
+
+\textbf{Adaptive evaluation.}
+Starting from the frozen checkpoint, agents are evaluated adaptively:
+weights are updated at each step using the appropriate online algorithm.
+Episode~1 uses the frozen checkpoint; subsequent episodes continue from
+the updated weights.
+
+\textbf{Cost model.}
+$C = C_q \cdot \sum_t \ell_t + C_c \cdot N_c + C_s \cdot \sum_t
+\sigma_t$, where $C_q = \$0.00001$/ms, $C_c = \$0.005$ per compaction
+operation, $C_s = \$0.000001$/KB-step, $\ell_t$ is per-step latency,
+$N_c$ is total compaction operations, and $\sigma_t$ is total table
+size in KB at step $t$.
+
+\textbf{Statistical reporting.}
+Descriptive statistics are reported as mean $\pm$ s.d.\ or mean with CV
+for multi-episode comparisons. No formal hypothesis testing is performed;
+comparisons are reported as absolute and relative differences in mean
+metric values. The sample size for the primary 1,000-step RL evaluation is
+$n = 5{,}000$ total step-level observations per agent (five episodes
+of 1,000 steps each), averaged to a representative 1,000-step episode.
+For multi-episode comparisons, $n = 5$ episode-level means per agent.
+
+\FloatBarrier
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{References}
+% ════════════════════════════════════════════════════════════════════════════
+
+\begin{enumerate}
+
+\item Blue, R., Weeks, D., Reid, J. \& Steinbach, C. Iceberg: A fast and
+  expressive table format for large, slow tables. In \textit{Proc. ACM
+  SIGMOD} 3434--3441 (ACM, 2020).
+
+\item Armbrust, M. \textit{et al.} Delta Lake: High-performance ACID table
+  storage over cloud object stores. \textit{Proc. VLDB Endow.}
+  \textbf{13}, 3411--3424 (2020).
+
+\item Chandar, V., Rao, B. S. \& Agarwal, N. Apache Hudi: The data lake
+  platform. \textit{arXiv} preprint arXiv:2301.09517 (2023).
+
+\item Kraska, T. \textit{et al.} The case for learned index structures. In
+  \textit{Proc. ACM SIGMOD} 489--504 (ACM, 2018).
+
+\item Agrawal, S. \textit{et al.} Database tuning advisor for Microsoft SQL
+  Server 2005. In \textit{Proc. VLDB} 1110--1121 (2004).
+
+\item Marcus, R. \& Papaemmanouil, O. Re-Join: How the machine learned to
+  join. In \textit{Workshop on ML for Progressively Learned Databases
+  (NIPS DBLearn)} (2018).
+
+\item Trummer, I. \textit{et al.} SkinnerDB: Regret-bounded query evaluation
+  via reinforcement learning. In \textit{Proc. ACM SIGMOD} 1153--1170
+  (ACM, 2019).
+
+\item Van Aken, D., Pavlo, A., Gordon, G. J. \& Zhang, B. Automatic
+  database management system tuning through large-scale machine learning.
+  In \textit{Proc. ACM SIGMOD} 1009--1024 (ACM, 2017).
+
+\item Zhang, J. \textit{et al.} An end-to-end automatic cloud database
+  tuning system using deep reinforcement learning. In \textit{Proc. ACM
+  SIGMOD} 415--432 (ACM, 2019).
+
+\item Vaswani, A. \textit{et al.} Attention is all you need. In
+  \textit{Advances in Neural Information Processing Systems (NeurIPS)}
+  vol.~30 (2017).
+
+\item Wang, Z. \textit{et al.} Dueling network architectures for deep
+  reinforcement learning. In \textit{Proc. ICML} 1995--2003 (2016).
+
+\item Dayan, N., Athanassoulis, M. \& Idreos, S. Dostoevsky: Better
+  space-time trade-offs for LSM-tree based key-value stores via adaptive
+  removal of superfluous merging. In \textit{Proc. ACM SIGMOD} 505--520
+  (ACM, 2018).
+
+\item Schulman, J. \textit{et al.} Proximal policy optimization algorithms.
+  \textit{arXiv} preprint arXiv:1707.06347 (2017).
+
+\item Camacho-Rodr\'{\i}guez, J. \textit{et al.} LST-Bench: Benchmarking
+  Log-Structured Tables in the Cloud. In \textit{Proc. ACM SIGMOD}
+  1--14 (ACM, 2024).
+
+\item Armbrust, M. \textit{et al.} Lakehouse: A New Generation of Open
+  Platforms that Unify Data Warehousing and Advanced Analytics. In
+  \textit{Proc. CIDR} (2021).
+
+\item Yang, Z. \textit{et al.} Qd-tree: Learning Data Layouts for Big
+  Data Analytics. In \textit{Proc. ACM SIGMOD} 170--184 (ACM, 2020).
+
+\item Kraska, T. \textit{et al.} SageDB: A Learned Database System. In
+  \textit{Proc. CIDR} (2019).
+
+\item Pavlo, A. \textit{et al.} Self-Driving Database Management Systems.
+  In \textit{Proc. CIDR} (2017).
+
+\item Marcus, R. \textit{et al.} Neo: A Learned Query Optimizer.
+  \textit{Proc. VLDB Endow.} \textbf{12}, 1705--1718 (2019).
+
+\item Li, G. \textit{et al.} QTune: A Query-Aware Database Tuning System
+  with Deep Reinforcement Learning. \textit{Proc. VLDB Endow.}
+  \textbf{12}, 2118--2130 (2019).
+
+\item Kanellis, K. \textit{et al.} LlamaTune: Sample-Efficient DBMS
+  Configuration Tuning. \textit{Proc. VLDB Endow.} \textbf{15},
+  2726--2738 (2022).
+
+\item Cai, B. \textit{et al.} HUNTER: An Online Cloud Database Hybrid
+  Tuning System for Personalized Requirements. In \textit{Proc. ACM
+  SIGMOD} 625--638 (ACM, 2022).
+
+\item Yang, Z. \textit{et al.} HWTune: A Hardware-Aware Database Tuning
+  System with Deep Reinforcement Learning. \textit{IEEE Trans. Knowl.
+  Data Eng.} \textbf{36}, 2284--2297 (2023).
+
+\item Feng, Y. \textit{et al.} CTuner: Automatic NoSQL Database Tuning
+  with Causal Reinforcement Learning. In \textit{Proc. ACM SIGKDD}
+  1--12 (ACM, 2024).
+
+\item Liu, Y. \textit{et al.} MLETune: Streamlining Database Knob Tuning
+  via Multi-LLMs Experts Guided Deep Reinforcement Learning.
+  \textit{IEEE Access} \textbf{12}, 1--15 (2024).
+
+\item Zhang, K., Yang, Z. \& Ba\c{s}ar, T. Multi-Agent Reinforcement
+  Learning: A Selective Overview of Theories and Algorithms.
+  \textit{J. Mach. Learn. Res.} \textbf{22}, 1--85 (2021).
+
+\item Vezhnevets, A. S. \textit{et al.} FeUdal Networks for Hierarchical
+  Reinforcement Learning. In \textit{Proc. ICML} 3540--3549 (2017).
+
+\item Wang, Y. \textit{et al.} A highly efficient distributed database
+  knobs tuning method based on multi-agent deep reinforcement learning.
+  \textit{J. Supercomput.} (2025).
+
+\end{enumerate}
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Data availability}
+% ════════════════════════════════════════════════════════════════════════════
+The datasets generated and analysed during the current study,
+including all experimental metrics collected across workload profiles,
+are available in the LakePilot repository at
+\url{https://github.com/OmarEssameldinMousa/LakePilot-Research-prototype}.
+The simulation environment (\env{}) used to generate all data,
+together with model weights, meta-controller implementations, and
+the model registry, is included in the same repository.
+No pre-existing external datasets were used in this study; all data
+was synthetically generated by the \env{} environment as described
+in the Methods section.
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Acknowledgements}
+% ════════════════════════════════════════════════════════════════════════════
+
+The authors developed the \env{} simulation environment utilising the
+open-source Apache Iceberg and Apache Spark frameworks.
+All figures were generated using Matplotlib
+(v3.8, \url{https://matplotlib.org}).
+
+
+\section*{Funding}
+This research did not receive any specific grant from funding agencies
+in the public, commercial, or not-for-profit sectors.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Author contributions statement}
+% ════════════════════════════════════════════════════════════════════════════
+
+O.E.\ conceived the idea, implemented the \env{} environment,
+developed the lakehouse solution, and    designed the whole experiments.
+O.K.\ implemented and trained the AI models.
+O.S.\ assisted in baseline analysis and overall project execution.
+A.Z.B.\ supervised the research.
+All authors reviewed and approved the final manuscript.
+
+% ════════════════════════════════════════════════════════════════════════════
+\section*{Additional information}
+% ════════════════════════════════════════════════════════════════════════════
+
+\textbf{Competing interests.} The authors declare no competing interests.
+
+\end{document}
