@@ -1,0 +1,7 @@
+# Host-side analysis and figure generation (revision/stats/*.py).
+# Runs outside the container; does not need PySpark or TensorFlow.
+# Versions used for every statistic and figure in the revision.
+numpy==1.26.4
+pandas==2.1.4
+scipy==1.16.0
+matplotlib==3.10.8

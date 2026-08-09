@@ -1,5 +1,30 @@
 # LakePilot — Multi-Agent RL for Autonomous Data Lakehouse Maintenance
 
+---
+
+## Scientific Reports revision (2026)
+
+This repository contains the complete revision materials responding to the
+Scientific Reports reviewer comments. **Start here:**
+
+| document | contents |
+|---|---|
+| [`revision/MASTER_SUMMARY.md`](revision/MASTER_SUMMARY.md) | every result, organised as manuscript numbers and point-by-point response material |
+| [`revision/REPRODUCE.md`](revision/REPRODUCE.md) | end-to-end reproduction instructions |
+| `revision/phaseN_*/SUMMARY.md` | per-phase numbers and verdicts |
+| [`revision/phase1_stats/PIPELINE_HISTORY.md`](revision/phase1_stats/PIPELINE_HISTORY.md) | audit trail of training-pipeline defects found and corrected |
+
+The revision adds multi-seed statistical validation (5 independent training runs
+per architecture with bootstrap CIs and non-parametric paired tests), compute and
+cost accounting, four sensitivity analyses, an oracle meta-controller bound,
+held-out generalization workloads, corrected online-adaptation experiments, and
+an attention mechanism analysis with a parameter-matched MLP control.
+
+Environment pinned in [`LakeGymLite/requirements.txt`](LakeGymLite/requirements.txt)
+(container) and [`requirements-analysis.txt`](requirements-analysis.txt) (host).
+Licensed under [MIT](LICENSE).
+
+
 > A research prototype that applies hierarchical multi-agent reinforcement learning to jointly optimize **compaction** and **partition management** in Apache Iceberg data lakehouses.
 ---
 For Direct access to Results and Training Data: `LakeGymLite/results`

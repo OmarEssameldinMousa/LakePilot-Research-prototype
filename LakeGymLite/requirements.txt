@@ -1,11 +1,19 @@
-pyspark
-pyyaml
-streamlit
-plotly
-duckdb
-graphviz
-watchdog
-pandas
-nicegui
-tensorflow-cpu
-numpy
+# LakeGymLite — simulation environment (runs inside the lakegym-lite container).
+# Versions pinned to those used for every result in the Scientific Reports
+# revision; recorded in each run manifest under "hardware"/"tf_version".
+# Container base: Python 3.10.12, Spark 3.5.7 (see LakeGymLite/Dockerfile).
+
+# ── core simulation ──
+pyspark==3.5.7
+numpy==2.2.6
+pandas==2.3.3
+pyyaml==6.0.3
+
+# ── reinforcement learning ──
+tensorflow-cpu==2.20.0
+
+# ── UI / interactive app (not needed for headless reproduction) ──
+nicegui==3.4.1
+plotly==6.5.0
+watchdog==6.0.0
+duckdb==1.4.3

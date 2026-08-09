@@ -32,7 +32,9 @@ RAW_ROOTS = [
     ROOT / 'revision' / 'phase1_stats' / 'raw',
     ROOT / 'revision' / 'phase1_stats' / 'recovery_data',
     ROOT / 'revision' / 'phase3_sensitivity',
+    ROOT / 'revision' / 'phase4_oracle',
     ROOT / 'revision' / 'phase5_generalization',
+    ROOT / 'revision' / 'phase7_attention',
 ]
 
 # An episode whose mean latency exceeds this is not a slow query, it is a crash.
