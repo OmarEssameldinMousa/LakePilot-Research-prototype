@@ -46,6 +46,7 @@ from datetime import datetime
 import numpy as np
 
 from simulation import LakeSimulator
+from agents.model_registry import MODEL_REGISTRY
 from policies import ALL_POLICIES
 from policies.base import Observation
 from policies.multi_agent_policy import MultiAgentPolicy, CompactOnlyPolicy, PartitionOnlyPolicy
@@ -191,8 +192,10 @@ def main():
     ap = argparse.ArgumentParser(description="Phase 1 seeded evaluation runner")
     ap.add_argument("--policy", required=True,
                     help="Registry policy name, or MultiAgentRL / CompactOnlyRL / PartitionOnlyRL")
+    # Choices come from the registry so a newly registered model cannot be
+    # rejected here (the Phase 7 parameter-matched MLP hit exactly that).
     ap.add_argument("--model-type", default="attentive_ppo",
-                    choices=["attentive_ppo", "mlp_ppo", "ddqn"])
+                    choices=sorted(MODEL_REGISTRY.keys()))
     ap.add_argument("--compact-weights", default=None,
                     help="Weights path; '{seed}' is replaced with the seed slot")
     ap.add_argument("--partition-weights", default=None)

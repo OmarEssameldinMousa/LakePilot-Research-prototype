@@ -9,6 +9,8 @@ Specialist agent for compaction decisions.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 from typing import Tuple, Optional
 
@@ -38,7 +40,7 @@ class CompactionAgent(BaseAgent):
 
     NUM_FEATURES = 8
     NUM_ACTIONS  = 4
-    WINDOW_SIZE  = 10
+    WINDOW_SIZE  = int(os.getenv('LAKEGYM_COMPACT_WINDOW', 10))
 
     # Normalization — must match training notebook ceilings
     # (aligned with simulation.py RewardCalculator constants)

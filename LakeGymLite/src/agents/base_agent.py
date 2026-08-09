@@ -14,6 +14,8 @@ import numpy as np
 from collections import deque
 from typing import Tuple, Optional, Dict, Any
 
+import os
+
 from agents.model_registry import BaseModel, build_model
 from policies.base import Observation
 
@@ -42,6 +44,11 @@ class BaseAgent:
         weights_path: Optional[str] = None,
         model_type: str = "attentive_ppo",
     ):
+        # Phase 7 tuning study: encoder capacity is overridable by environment
+        # variable. Defaults reproduce the published architecture exactly.
+        embed_dim = int(os.getenv('LAKEGYM_EMBED_DIM', embed_dim))
+        num_heads = int(os.getenv('LAKEGYM_NUM_HEADS', num_heads))
+
         self.name = name
         self.num_actions = num_actions
         self.num_features = num_features

@@ -239,16 +239,19 @@ class MlpPPOModel(BaseModel):
         window_size: int = 10,
         embed_dim: int = 64,   # unused, kept for uniform factory signature
         num_heads: int = 4,    # unused, kept for uniform factory signature
+        hidden1: int = 256,
+        hidden2: int = 128,
     ):
         super().__init__()
         self.num_actions = num_actions
         self.num_features = num_features
         self.window_size = window_size
+        self.hidden1, self.hidden2 = hidden1, hidden2
 
-        # Shared trunk
+        # Shared trunk (widths configurable for the Phase 7 parameter-matched variant)
         self.flatten = tf.keras.layers.Flatten()
-        self.shared_fc1 = tf.keras.layers.Dense(256, activation='relu', name='shared_fc1')
-        self.shared_fc2 = tf.keras.layers.Dense(128, activation='relu', name='shared_fc2')
+        self.shared_fc1 = tf.keras.layers.Dense(hidden1, activation='relu', name='shared_fc1')
+        self.shared_fc2 = tf.keras.layers.Dense(hidden2, activation='relu', name='shared_fc2')
         self.shared_dropout = tf.keras.layers.Dropout(0.1)
 
         # Actor head
@@ -289,10 +292,35 @@ class MlpPPOModel(BaseModel):
 # Registry & factory
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Phase 7: MLP hidden widths solved so trainable parameters match AttentivePPO
+# per specialist within +/-0.11% (compaction 84,837 vs 84,741; partition 85,830
+# vs 85,830). Keyed by (num_actions, num_features, window_size).
+MATCHED_MLP_HIDDEN = {
+    (4, 8, 10): (128, 288),    # compaction
+    (5, 14, 20): (128, 192),   # partition
+}
+
+
+class MlpPPOMatchedModel(MlpPPOModel):
+    """MLP-PPO with hidden widths chosen to match AttentivePPO's parameter count.
+
+    Controls for the capacity confound in the attention-vs-MLP comparison: the
+    published models differ in both encoder AND size, and in opposite directions
+    per specialist (MLP has 17% fewer parameters on compaction but 42% more on
+    partition).
+    """
+
+    def __init__(self, num_actions, num_features, window_size=10, embed_dim=64, num_heads=4):
+        h1, h2 = MATCHED_MLP_HIDDEN.get((num_actions, num_features, window_size), (256, 128))
+        super().__init__(num_actions, num_features, window_size,
+                         embed_dim, num_heads, hidden1=h1, hidden2=h2)
+
+
 MODEL_REGISTRY = {
     'attentive_ppo': AttentivePPOModel,
     'ddqn': DuelingDDQNModel,
     'mlp_ppo': MlpPPOModel,
+    'mlp_ppo_matched': MlpPPOMatchedModel,
 }
 
 

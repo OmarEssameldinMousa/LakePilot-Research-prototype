@@ -9,6 +9,8 @@ Specialist agent for partition decisions.
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
 from typing import Tuple, Optional
 
@@ -41,7 +43,7 @@ class PartitionAgent(BaseAgent):
 
     NUM_FEATURES = 14
     NUM_ACTIONS  = 5
-    WINDOW_SIZE  = 20
+    WINDOW_SIZE  = int(os.getenv('LAKEGYM_PARTITION_WINDOW', 20))
 
     # Normalization — must match training notebook ceilings
     # (aligned with simulation.py RewardCalculator constants)
