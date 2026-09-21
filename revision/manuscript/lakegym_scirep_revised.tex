@@ -486,7 +486,14 @@ trained seeds individually exceed the best heuristic (per-seed range
   which is itself an argument for reporting both.}
 \end{table}
 
-\FloatBarrier
+% No \FloatBarrier here. This subsection holds three large floats (Tables 1
+% and 2, Figure 1) and little body text, so Table 2 is always deferred past
+% page 4. A barrier at this point calls \clearpage, which gives a deferred
+% float a page of its own -- Table 2 alone on a 65%-blank page, with the next
+% subsection pushed after it. Verified: shrinking the table, its caption and
+% Figure 1 does not avoid this; only removing the barrier does. Without it
+% Table 2 sets at the top of the same page as Table 3, and the paper is one
+% page shorter. The distance from its first mention is unchanged either way.
 
 \subsection*{Architecture comparison and training-run variability}
 \label{sec:threeway}
