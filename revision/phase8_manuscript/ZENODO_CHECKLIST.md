@@ -78,10 +78,15 @@ persuasive option.
 
 ## Round-2 release (second revision)
 
-The round-1 deposit (DOI 10.5281/zenodo.21860273) is cited in the manuscript and
-stays valid. The second revision adds code, runs and analyses, so it needs a new
-**version** of the same Zenodo record — which keeps the concept DOI stable and
-mints a new version DOI.
+**Released 21 September 2026.** The second revision added code, runs and
+analyses, so it went out as a new **version** of the same Zenodo record, which
+keeps the concept DOI stable and mints a new version DOI.
+
+| DOI | Points at |
+|---|---|
+| `10.5281/zenodo.22868593` | this release, `v1.1-revision2` — cited in the manuscript |
+| `10.5281/zenodo.21860272` | concept DOI, always resolves to the newest version |
+| `10.5281/zenodo.21860273` | round-1 release `v1.0-revision`, cited in the round-1 letter |
 
 ### New in this release
 
@@ -116,12 +121,13 @@ Data:
 
 ### Steps
 
-- [ ] **[you]** Run `python3 revision/stats/validate_runs.py` over the new runs
-      and confirm 0 corrupted before archiving
-- [ ] **[you]** Tag the release (`v1.1-revision2`) and push
-- [ ] **[you]** Create the new version on the existing Zenodo record
-- [ ] **[you]** Update the version DOI in *Code availability* and *Data
-      availability* if the journal prefers the version DOI to the concept DOI
+- [x] Run `python3 revision/stats/validate_runs.py` over the new runs and confirm
+      0 corrupted before archiving — 261 clean, 0 corrupted
+- [x] Tag the release (`v1.1-revision2`) and push
+- [x] Create the new version on the existing Zenodo record
+- [x] Update the version DOI in *Code availability* and *Data availability* — both
+      now cite the version DOI `10.5281/zenodo.22868593` and name the concept DOI
+      alongside it; the R2 response letter (comment E-2) cites the same pair
 - [ ] **[you]** Confirm the repository URL renders in full in the typeset PDF
       (the round-1 truncation was a line-breaking artefact; `xurl` is now loaded,
       but it is worth checking the proof)
