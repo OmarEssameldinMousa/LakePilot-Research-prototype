@@ -1,0 +1,28 @@
+{
+  "intercept_ms": 135.44271846937286,
+  "slope_ms_per_file": 4.985917459181445,
+  "pearson_r": 0.9992927422735428,
+  "select1_median_ms": 55.22274971008301,
+  "single_row_mean_ms": 93.30570697784424,
+  "sweep_file_counts": [
+    14,
+    21,
+    28,
+    56,
+    112,
+    224,
+    448
+  ],
+  "sweep_mean_latency_ms": [
+    264.8,
+    241.5,
+    243.2,
+    393.6,
+    688.5,
+    1238.8,
+    2379.9
+  ],
+  "staged_rows": 20000,
+  "staged_bytes": 1772073,
+  "caveat": "slope is measured at 1.7 MB spread over 14-448 files; bytes-per-file differs from the policies operating points, so the slope is not extrapolated to them"
+}

@@ -17,6 +17,14 @@
 \usepackage{subcaption}
 \usepackage{placeins}
 
+% Long \texttt identifiers (WorkloadAwareThreshold, PARTITION_EVENT_TYPE) are
+% single unbreakable words that overflow the text block -- the same failure that
+% truncated the repository URL in the original submission. [htt] lets TeX
+% hyphenate inside typewriter text, and \emergencystretch relaxes spacing on the
+% remaining tight lines.
+\usepackage[htt]{hyphenat}
+\emergencystretch=2em
+
 % ── Float placement parameters ──────────────────────────────────────────────
 \renewcommand{\topfraction}{0.85}
 \renewcommand{\bottomfraction}{0.70}
@@ -89,10 +97,10 @@ Evaluation on \env{}, a simulation environment backed by a real Iceberg
 table on Apache Spark, comprises 216 seeded runs with paired
 non-parametric significance testing.
 The best configuration (\ddqn{}) attains a mean global reward of 0.2105
-(95\% CI [0.2050, 0.2155]), exceeding the strongest of 17 heuristic
-baselines by $+$8.3\% (paired permutation $p = 0.001$, Cliff's
-$\delta = +0.71$), with all five independent training runs individually
-beating that heuristic.
+(95\% CI [0.2026, 0.2185], bootstrap over training seeds), exceeding the
+strongest of 17 heuristic baselines by $+$8.3\% (paired permutation
+$p = 0.002$, Cliff's $\delta = +0.71$), with all five independent
+training runs individually beating that heuristic.
 The advantage persists on two held-out workloads exhibiting gradual
 drift and concurrent query mixtures.
 Ablation confirms a non-additive interaction between the two
@@ -176,9 +184,12 @@ This paper makes the following contributions.
 
 \item \textbf{Negative results.} Two findings that generalise beyond
   lakehouse maintenance: \emph{trajectory-identity leakage} when
-  training offline RL on logs pooled from multiple behaviour policies,
-  and a \emph{signal-below-noise} explanation for why greedy
-  one-step meta-control fails where cooldown-based pacing succeeds.
+  training offline RL on logs pooled from multiple behaviour policies
+  --- a specialisation of causal confusion in imitation
+  learning\textsuperscript{10,11} to time-since-event features,
+  together with a counterfactual probe that detects it --- and a
+  \emph{signal-below-noise} explanation for why greedy one-step
+  meta-control fails where cooldown-based pacing succeeds.
 \end{itemize}
 
 \FloatBarrier
@@ -189,8 +200,8 @@ This paper makes the following contributions.
 % ════════════════════════════════════════════════════════════════════════════
 
 \textbf{Learned data layout.}
-Qd-tree\textsuperscript{16} learns a block-partitioning scheme for
-analytical workloads, and SageDB\textsuperscript{17} and learned index
+Qd-tree\textsuperscript{12} learns a block-partitioning scheme for
+analytical workloads, and SageDB\textsuperscript{13} and learned index
 structures\textsuperscript{4} synthesise data structures specialised to
 an observed data and query distribution. These systems learn a
 \emph{layout} offline for a distribution assumed to be known and
@@ -203,24 +214,24 @@ layout, and the cost of acting is part of the objective.
 \textbf{Reinforcement learning for database tuning.}
 A substantial line of work applies RL to DBMS configuration:
 OtterTune\textsuperscript{8} and CDBTune\textsuperscript{9} for knob
-tuning, QTune\textsuperscript{20} for query-aware tuning,
-LlamaTune\textsuperscript{21} for sample-efficient search,
-HUNTER\textsuperscript{22} for hybrid online tuning,
-HWTune\textsuperscript{23} for hardware-aware tuning,
-CTuner\textsuperscript{24} for causal NoSQL tuning,
-MLETune\textsuperscript{25} for LLM-guided knob tuning, and
+tuning, QTune\textsuperscript{14} for query-aware tuning,
+LlamaTune\textsuperscript{15} for sample-efficient search,
+HUNTER\textsuperscript{16} for hybrid online tuning,
+HWTune\textsuperscript{17} for hardware-aware tuning,
+CTuner\textsuperscript{18} for causal NoSQL tuning,
+MLETune\textsuperscript{19} for LLM-guided knob tuning, and
 multi-agent knob tuning for distributed
-databases\textsuperscript{28}. In all of these the action adjusts a
+databases\textsuperscript{20}. In all of these the action adjusts a
 configuration parameter; it does not rewrite data. Our actions are
 physically destructive rewrites of Parquet files and evolutions of the
 Iceberg partition specification, whose effects are delayed, partially
 irreversible, and interact with each other. Self-driving
-databases\textsuperscript{18} articulate the broader vision of
+databases\textsuperscript{21} articulate the broader vision of
 autonomous physical design that our work instantiates for the lakehouse
 maintenance problem specifically.
 
 \textbf{Learned query optimisation.}
-Neo\textsuperscript{19}, SkinnerDB\textsuperscript{7} and
+Neo\textsuperscript{22}, SkinnerDB\textsuperscript{7} and
 Re-Join\textsuperscript{6} learn to choose query plans. These operate
 inside the execution of a single query, whereas maintenance decisions
 change the physical state that all subsequent queries observe. The two
@@ -230,19 +241,49 @@ a layout, while our agents change the layout the optimiser sees.
 \textbf{Lakehouse storage and merge policy.}
 Iceberg\textsuperscript{1}, Delta Lake\textsuperscript{2} and
 Hudi\textsuperscript{3} define the transactional substrate;
-LST-Bench\textsuperscript{14} provides workload-level benchmarking for
+LST-Bench\textsuperscript{23} provides workload-level benchmarking for
 log-structured tables; and the Lakehouse
-architecture\textsuperscript{15} frames the design space.
-Dostoevsky\textsuperscript{12} analyses space--time trade-offs in
+architecture\textsuperscript{24} frames the design space.
+Dostoevsky\textsuperscript{25} analyses space--time trade-offs in
 LSM-tree merging and is the closest prior treatment of compaction as an
 optimisation problem, but it derives a static merge policy analytically
 for a key-value store rather than learning an online policy for a
 columnar table under a shifting query distribution.
 
+\textbf{Shortcut learning in imitation and offline RL.}
+Training a policy on logs generated by other policies is an imitation
+problem before it is a control problem, and it inherits that field's
+characteristic failure. de Haan \textit{et al.}\textsuperscript{10}
+show that a cloned policy will latch onto whatever feature best predicts
+the demonstrator's action, including features that are effects of the
+demonstrator's behaviour rather than causes of the correct action --- a
+confusion that \emph{worsens} with more expressive models, because the
+shortcut is easier to fit than the causal structure. The closely related
+``copycat'' problem\textsuperscript{11} arises when observation
+histories are available: the previous action is nearly sufficient to
+predict the next one, so the policy learns to repeat rather than to act.
+The defect we report below in our own pipeline is an instance of this
+class, specialised to operational logs: when trajectories from several
+maintenance policies are pooled, time-since-event features identify
+\emph{which} policy generated a trajectory, and the objective prefers
+that identity over the table state. Our contribution is the
+specialisation and its detection (a counterfactual probe over the
+suspect feature), not the phenomenon.
+
+On the offline-RL side, conservative
+methods\textsuperscript{26,27,28} address the
+complementary failure --- value overestimation on actions the behaviour
+policy never took --- by penalising out-of-distribution actions, filtering
+them, or constraining the learned policy to the data support. We report
+the action coverage of our pools in Methods and explain there why we did
+not apply these methods.
+
 \textbf{Hierarchical and multi-agent RL.}
-FeUdal Networks\textsuperscript{27} learn a manager that sets subgoals
-for a worker, and the multi-agent RL literature\textsuperscript{26}
-surveys coordination mechanisms. Our meta-controller occupies the
+FeUdal Networks\textsuperscript{29} learn a manager that sets subgoals
+for a worker, the option-critic architecture\textsuperscript{30} learns
+both the options and the policy over them end to end, and the
+multi-agent RL literature\textsuperscript{31} surveys coordination
+mechanisms. Our meta-controller occupies the
 manager role but is rule-based rather than learned. We treat this as a
 deliberate simplification and evaluate it directly: we construct an
 oracle arbitrator and a sensitivity sweep over its constants to bound
@@ -281,10 +322,13 @@ The staleness features $\delta_c$ (steps since last compaction) and
 $\delta_p$ (steps since last partition change) encode \emph{which
 behaviour policy generated a trajectory}: they remain near zero for
 \texttt{AlwaysCompact} and grow without bound for
-\texttt{No\_Maintenance}. When advantage-weighted regression is trained
-on logs pooled across heuristics, these features provide a shortcut that
+\texttt{No\_Maintenance}. When advantage-weighted
+regression\textsuperscript{32} is trained on logs pooled across
+heuristics, these features provide a shortcut that
 identifies the generating policy, and the network clones it instead of
-reading table state. Holding table state fixed and varying only
+reading table state --- the mechanism known as causal confusion in
+imitation learning\textsuperscript{10}, here driven by a feature
+that systems telemetry supplies as a matter of course. Holding table state fixed and varying only
 $\delta_c$ from 0 to 30, the predicted probability of \noop{} rises from
 0.00 to 0.94 --- a policy that is a function of trajectory provenance
 rather than of the lakehouse.
@@ -314,11 +358,22 @@ episodes per policy. Environment seeds are a deterministic function of
 every policy is evaluated on identical episodes and all comparisons are
 paired.
 
-\ddqn{} attains the highest mean global reward (0.2105, 95\% CI
-[0.2050, 0.2155]), ahead of the best workload-aware heuristic
-(\texttt{WorkloadAwareThreshold}, 0.1943) by $+$0.0162, a relative
-improvement of $+$8.3\%. The 1{,}000-step protocol produces a
-concordant ordering (Spearman $\rho = 0.964$, $p < 0.001$).
+\ddqn{} attains the highest mean global reward (0.2105), ahead of the
+best workload-aware heuristic (\texttt{WorkloadAwareThreshold}, 0.1943)
+by $+$0.0162, a relative improvement of $+$8.3\%. The 1{,}000-step
+protocol produces a concordant ordering (Spearman $\rho = 0.964$,
+$p < 0.001$).
+
+Table~\ref{tab:ranking} reports two confidence intervals per policy,
+because the two answer different questions. The episode-level interval
+([0.2050, 0.2155] for \ddqn{}) treats the 25 episodes as the sampling
+unit. The seed-cluster interval ([0.2026, 0.2185]) resamples the five
+\emph{training runs} with their episodes nested, which is the relevant
+uncertainty for a reader asking how a newly trained agent would perform,
+and is necessarily the wider of the two. The headline comparison
+survives the stricter interval: \ddqn{}'s seed-cluster lower bound
+(0.2026) still lies above the best heuristic's seed-cluster upper bound
+(0.1958). We quote the seed-cluster interval in the Abstract.
 
 We emphasise two features of this table that were absent from our
 original analysis. First, \textbf{not all RL configurations beat the
@@ -331,32 +386,41 @@ between architectures (0.0104 for \ddqn{} versus 0.0403 for
 
 \begin{table}[!htbp]
 \centering
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{clcccccc}
+\setlength{\tabcolsep}{3pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{clccccccc}
 \toprule
-\textbf{Rank} & \textbf{Policy} & \textbf{Reward} & \textbf{95\% CI} &
+\textbf{Rank} & \textbf{Policy} & \textbf{Reward} &
+  \textbf{95\% CI (episode)} & \textbf{95\% CI (seed cluster)} &
   \textbf{Seed s.d.} & \textbf{Latency (ms)} & \textbf{Files} &
   \textbf{Pruning} \\
 \midrule
-1 & \textbf{\ddqn{}} (RL)        & \textbf{0.2105} & [0.2050, 0.2155] & 0.0104 & 219.6 & 37.4 & 0.204 \\
-2 & \texttt{WorkloadAwareThreshold} & 0.1943 & [0.1923, 0.1964] & 0.0020 & 323.6 & 49.9 & \textbf{0.248} \\
-3 & \texttt{AlwaysCompact\_C128}    & 0.1903 & [0.1901, 0.1904] & 0.0002 & 197.9 & \textbf{22.1} & 0.000 \\
-4 & \textbf{\attentive{}} (RL)   & 0.1823 & [0.1669, 0.1963] & 0.0403 & 331.1 & 51.6 & 0.225 \\
-5 & \texttt{Threshold10\_C128}      & 0.1710 & [0.1708, 0.1712] & 0.0003 & 203.3 & 26.1 & 0.000 \\
-6 & \textbf{\mlpppo{}} (RL)      & 0.1675 & [0.1579, 0.1772] & 0.0254 & 316.9 & 61.6 & 0.221 \\
-7 & \texttt{Threshold10\_C64}       & 0.1273 & [0.1267, 0.1280] & 0.0011 & 321.3 & 46.8 & 0.000 \\
-8 & \texttt{CompactOnly} (ablation) & 0.1202 & [0.1086, 0.1315] & 0.0428 & 314.0 & 48.4 & 0.000 \\
-9 & \texttt{PartitionOnly} (ablation) & $-$0.1099 & [$-$0.1195, $-$0.1011] & 0.0116 & 3{,}643 & 793.0 & 0.080 \\
+1 & \textbf{\ddqn{}} (RL)        & \textbf{0.2105} & [0.2050, 0.2155] & [0.2026, 0.2185] & 0.0104 & 219.6 & 37.4 & 0.204 \\
+2 & \texttt{WorkloadAwareThreshold} & 0.1943 & [0.1923, 0.1964] & [0.1928, 0.1958] & 0.0020 & 323.6 & 49.9 & \textbf{0.248} \\
+3 & \texttt{AlwaysCompact\_C128}    & 0.1903 & [0.1901, 0.1904] & [0.1901, 0.1904] & 0.0002 & 197.9 & \textbf{22.1} & 0.000 \\
+4 & \textbf{\attentive{}} (RL)   & 0.1823 & [0.1669, 0.1963] & [0.1481, 0.2121] & 0.0403 & 331.1 & 51.6 & 0.225 \\
+5 & \texttt{Threshold10\_C128}      & 0.1710 & [0.1708, 0.1712] & [0.1708, 0.1712] & 0.0003 & 203.3 & 26.1 & 0.000 \\
+6 & \textbf{\mlpppo{}} (RL)      & 0.1675 & [0.1579, 0.1772] & [0.1481, 0.1870] & 0.0254 & 316.9 & 61.6 & 0.221 \\
+7 & \texttt{Threshold10\_C64}       & 0.1273 & [0.1267, 0.1280] & [0.1264, 0.1282] & 0.0011 & 321.3 & 46.8 & 0.000 \\
+8 & \texttt{CompactOnly} (ablation) & 0.1202 & [0.1086, 0.1315] & [0.0949, 0.1455] & 0.0323 & 314.2 & 48.4 & 0.000 \\
+9 & \texttt{PartitionOnly} (ablation)$^{\dagger}$ & $-$0.1099 & [$-$0.1195, $-$0.1011] & [$-$0.1232, $-$0.1020] & 0.0116 & 3{,}643 & 793.0 & 0.080 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{\label{tab:ranking}\textbf{Policy ranking with uncertainty.}
-  Mean global reward with percentile bootstrap 95\% confidence intervals
-  (10{,}000 resamples) on the 500-step evaluation workload, 25 matched
-  episodes per policy (5 training seeds $\times$ 5 episodes). ``Seed
-  s.d.''\ is the standard deviation of the five per-seed means and
-  quantifies training-run variability, which the confidence interval on
-  the pooled mean does not. Hierarchical RL agents are shown in bold.
-  Latency, file count and pruning ratio are episode-level means.}
+  Mean global reward on the 500-step evaluation workload
+  (\texttt{eval500}: 500 steps, 5 training seeds $\times$ 5 episodes = 25
+  matched episodes per policy). Two percentile bootstrap 95\% intervals
+  are reported (10{,}000 resamples each). The \emph{episode} interval
+  resamples the 25 episodes and answers ``how precisely do we know this
+  agent's mean?''. The \emph{seed-cluster} interval resamples the five
+  training seeds with their episodes nested, and answers the question a
+  practitioner actually asks --- ``how would a \emph{newly trained} agent
+  perform?''. It is the wider and more conservative of the two, and it is
+  the interval quoted in the Abstract. ``Seed s.d.''\ is the standard
+  deviation of the five per-seed means. Hierarchical RL agents are shown
+  in bold. Latency, file count and pruning ratio are episode-level means.
+  $^{\dagger}$\texttt{PartitionOnly} was evaluated on 3 seeds
+  (15 episodes); every other row uses 5 seeds.}
 \end{table}
 
 \begin{figure}[!htbp]
@@ -386,30 +450,39 @@ trained seeds individually exceed the best heuristic (per-seed range
 
 \begin{table}[!htbp]
 \centering
-\begin{tabular}{lccccl}
+\begin{tabular}{lcccccl}
 \toprule
-\textbf{Comparison (\ddqn{} vs.)} & $\Delta$ & $p_{\text{Holm}}$ &
+\textbf{Comparison (\ddqn{} vs.)} & $n$ & $\Delta$ & $p_{\text{Holm}}$ &
   \textbf{Cliff's} $\delta$ & \textbf{Magnitude} & \textbf{Verdict} \\
 \midrule
-\texttt{WorkloadAwareThreshold} & $+$0.0162 & 0.00105 & $+$0.71 & large  & significant \\
-\texttt{AlwaysCompact\_C128}    & $+$0.0202 & 0.00075 & $+$0.84 & large  & significant \\
-\attentive{}                    & $+$0.0282 & 0.0018  & $+$0.44 & medium & significant \\
-\texttt{Threshold10\_C128}      & $+$0.0395 & 0.00075 & $+$1.00 & large  & significant \\
-\texttt{Threshold10\_C64}       & $+$0.0832 & 0.00075 & $+$1.00 & large  & significant \\
+\texttt{WorkloadAwareThreshold} & 25 & $+$0.0162 & 0.0018 & $+$0.71 & large  & significant \\
+\texttt{AlwaysCompact\_C128}    & 25 & $+$0.0202 & 0.0018 & $+$0.84 & large  & significant \\
+\attentive{}                    & 25 & $+$0.0282 & 0.0020 & $+$0.44 & medium & significant \\
+\texttt{Threshold10\_C128}      & 25 & $+$0.0395 & 0.0018 & $+$1.00 & large  & significant \\
+\texttt{Threshold10\_C64}       & 25 & $+$0.0832 & 0.0018 & $+$1.00 & large  & significant \\
 \midrule
-\multicolumn{6}{l}{\emph{Comparisons that are not significant:}} \\
-\attentive{} vs.\ \mlpppo{}                     & $+$0.0148 & 0.31 & $+$0.33 & medium & not significant \\
-\attentive{} vs.\ \texttt{WorkloadAwareThreshold} & $-$0.0120 & 0.47 & $-$0.20 & small  & not significant \\
+\multicolumn{7}{l}{\emph{Comparisons that are not significant:}} \\
+\attentive{} vs.\ \mlpppo{}                     & 25 & $+$0.0148 & 0.37 & $+$0.33 & medium & not significant \\
+\attentive{} vs.\ \texttt{WorkloadAwareThreshold} & 25 & $-$0.0120 & 0.58 & $+$0.10 & negligible & not significant \\
 \bottomrule
 \end{tabular}
 \caption{\label{tab:significance}\textbf{Paired significance tests on global reward.}
-  Differences are paired by environment seed over 25 matched episodes.
-  $p$-values are from exact paired permutation tests with
-  Holm--Bonferroni correction within the family; Wilcoxon signed-rank
-  tests agree on every verdict. Cliff's $\delta$ magnitude thresholds
-  are 0.147 (small), 0.33 (medium), 0.474 (large). \mlpppo{} is
-  significantly \emph{worse} than the best heuristic
-  ($\Delta = -0.0268$, $p_{\text{Holm}} = 0.0018$).}
+  Differences are paired by environment seed on the \texttt{eval500}
+  protocol; $n$ is the number of matched episodes contributing to each
+  comparison, resolved per comparison rather than globally. $p$-values
+  are from paired permutation tests (Monte Carlo, 20{,}000 sign-flips
+  above $n=20$, so the smallest attainable raw $p$ is
+  $5\times10^{-5}$) with Holm--Bonferroni correction across the 36
+  comparisons in this family; Wilcoxon signed-rank tests agree on every
+  verdict. Cliff's $\delta$ magnitude thresholds are 0.147 (small), 0.33
+  (medium), 0.474 (large). \mlpppo{} is significantly \emph{worse} than
+  the best heuristic ($\Delta = -0.0268$, $p_{\text{Holm}} = 0.0020$,
+  $\delta = -0.71$). Note the final row, where the mean difference is
+  negative while $\delta$ is slightly positive: \attentive{} loses on the
+  mean because two of its five seeds fail badly, but wins a bare
+  majority of individual episode pairings. The two statistics disagree
+  because the mean is sensitive to those two seeds and $\delta$ is not,
+  which is itself an argument for reporting both.}
 \end{table}
 
 \FloatBarrier
@@ -486,6 +559,19 @@ absolute rewards rather than percentage gains over
 \texttt{PartitionOnly}, because that baseline suffers uncontrolled file
 proliferation and a ratio against it is close to tautological.
 
+\textbf{This ablation is run on \attentive{}, not on the headline
+\ddqn{} agent.} The ``full hierarchical agent'' row is therefore
+\attentive{}'s 0.1823, the same value as its row in
+Table~\ref{tab:ranking}, and the ablations restrict that architecture's
+specialists. We chose it when the ablation was designed and before the
+multi-seed results had identified \ddqn{} as the stronger architecture,
+and we state it here rather than leaving it to be inferred from the
+Methods. Because the mechanism at stake --- that partitioning without
+compaction cannot deliver pruning --- is a property of the environment
+rather than of the encoder, we expected it to hold for \ddqn{} as well,
+and we tested that expectation directly rather than assuming it
+(Table~\ref{tab:ablationddqn}).
+
 The informative comparison is against \texttt{CompactOnly}. The full
 agent and \texttt{CompactOnly} are physically almost identical --- 51.6
 versus 48.4 mean files, 331 versus 314\,ms mean latency --- so
@@ -536,6 +622,57 @@ Full hierarchical agent    & 0.1823    & ---       & 0.225 & 51.6  & 331 \\
   specialists is non-additive.}
 \end{figure}
 
+\textbf{The same ablation on \ddqn{}.}
+Because the headline agent is \ddqn{}, we repeated both ablations on it
+(Table~\ref{tab:ablationddqn}). Every conclusion above reappears, and
+more sharply. Removing the partition specialist costs $0.0507$
+($p_{\text{Holm}} = 0.0001$, $\delta = +1.00$, 25 paired episodes) while
+leaving the physical table essentially unchanged --- 32.4 versus 37.4
+files and 222 versus 220\,ms --- so once again the entire gap is pruning
+(0.204 versus exactly 0.000). Removing the compaction specialist
+collapses pruning to 0.030, further below the 0.204 the same specialist
+reaches inside the full agent than the 0.080 we measured for
+\attentive{}, and the table degenerates to 1{,}117 files and 4.3\,s
+queries.
+
+We ran the \ddqn{} \texttt{PartitionOnly} arm on three seeds with one
+episode each, because at 36 minutes of Spark execution per episode a
+five-episode design would have cost nine hours to re-establish a
+mechanism the environment already guarantees: pruning benefit is scaled
+by the fraction of data lying in the declared layout, and only
+compaction rewrites data into it, so an agent without a compaction
+action cannot reach full coverage however well it chooses partition
+specifications. With $n = 3$ the permutation test's floor is $p = 0.25$,
+so we report this arm as a confirmation of the mechanism and an effect
+size, not as a hypothesis test.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Configuration} & \textbf{Reward} & $\Delta$ \textbf{vs.\ full} &
+  \textbf{Pruning} & \textbf{Files} & \textbf{Latency (ms)} \\
+\midrule
+Full \ddqn{} agent      & 0.2105    & ---       & 0.204 & 37.4    & 220 \\
+\texttt{CompactOnly}    & 0.1597    & $-$0.0507 & 0.000 & 32.4    & 222 \\
+\texttt{PartitionOnly}$^{\dagger}$ & $-$0.1713 & $-$0.3766 & 0.030 & 1{,}117 & 4{,}278 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:ablationddqn}\textbf{Specialist ablation repeated on \ddqn{}.}
+  The ablation in Table~\ref{tab:ablation} uses \attentive{}; this one
+  restricts the headline \ddqn{} agent to the same action sub-spaces,
+  evaluated on \texttt{eval500} and paired by environment seed against
+  the full agent. \texttt{CompactOnly}: 5 seeds $\times$ 5 episodes,
+  $p_{\text{Holm}} = 0.0001$, $\delta = +1.00$.
+  $^{\dagger}$\texttt{PartitionOnly}: 3 seeds $\times$ 1 episode, paired
+  against the corresponding episodes of the full agent; at $n = 3$ the
+  exact permutation test cannot fall below $p = 0.25$, so this row is
+  reported as an effect size and a mechanism check rather than a test.
+  The conclusion is the same as for \attentive{} and somewhat stronger:
+  partitioning without compaction delivers almost no pruning (0.030
+  against 0.204 within the full agent).}
+\end{table}
+
 \FloatBarrier
 
 \subsection*{Sensitivity to hand-chosen constants}
@@ -549,7 +686,13 @@ reward weights. We vary each in turn.
 Table~\ref{tab:meta} sweeps the urgency threshold $\theta$, the
 utilisation boost, and both cooldowns one at a time around the published
 operating point, evaluating each configuration on the same three matched
-episodes. Reward varies by 0.0295 across the entire grid, or 14.5\% of
+episodes (one episode on each of three seeds, with the \ddqn{}
+checkpoint matched to the seed). The default configuration therefore
+scores 0.2033 here rather than the 0.2105 of Table~\ref{tab:ranking},
+which is the same agent and the same 500-step workload measured over 25
+episodes instead of 3; the two intervals overlap substantially. Only
+differences \emph{within} this table are meaningful, because only those
+are paired. Reward varies by 0.0295 across the entire grid, or 14.5\% of
 the default configuration's value, and no configuration collapses.
 The published constants are reasonable but mildly conservative: a
 2-step compaction cooldown would have improved reward by 8.2\%. We note
@@ -608,13 +751,31 @@ $\{0.8, 0.9, 1.0, 1.1, 1.2\}$ and re-evaluated both the best RL agent
 and the best heuristic at each scale, so that the \emph{gap} rather than
 only the absolute score can be tracked (Table~\ref{tab:pruningscale}).
 
+This sweep uses the same reduced budget as the meta-controller sweep:
+three matched episodes per configuration, one on each of three seeds
+(Table~\ref{tab:protocols}). Scale 1.0 is therefore \emph{not} the
+published configuration re-reported --- it is the same agent and
+workload measured on 3 episodes rather than 25, which is why \ddqn{}
+reads 0.2005 here against 0.2105 in Table~\ref{tab:ranking} and
+\texttt{WorkloadAwareThreshold} 0.1971 against 0.1943. Each 3-episode
+estimate is correspondingly imprecise (\ddqn{} at scale 1.0:
+95\% CI [0.1895, 0.2196], which contains 0.2105). The row to read is the
+gap, which is paired within each scale; the absolute levels should be
+taken from Table~\ref{tab:ranking}.
+
 The RL advantage is positive at every scale, including a 20\% weaker
 pruning benefit. We also note a fact that bears directly on the concern
 that the advantage is an artefact of the pruning table: \ddqn{} wins
 while achieving \emph{lower} pruning than the best heuristic (0.204
-versus 0.248, Table~\ref{tab:ranking}). Its advantage comes from
-compaction quality --- 37 files versus 50, 220\,ms versus 324\,ms ---
-rather than from exploiting the pruning table more aggressively.
+versus 0.248, Table~\ref{tab:ranking}). Its advantage instead shows up
+in the physical state of the table --- 37 files versus 50, and 220\,ms
+versus 324\,ms mean query latency on the 25-episode protocol (258 versus
+309\,ms on the three episodes of this sweep) --- rather than in
+exploiting the pruning table more aggressively. We qualify the latency
+half of that statement below: a substantial and measured part of query
+latency at this scale is fixed overhead that no policy can remove, so
+the 104\,ms difference is a difference in the scan-dependent remainder,
+not in total query cost.
 
 \begin{table}[!htbp]
 \centering
@@ -642,10 +803,16 @@ rather than from exploiting the pruning table more aggressively.
 \includegraphics[width=0.70\linewidth]{charts/fig_pruning_gap}
 \caption{\label{fig:pruninggap}\textbf{RL advantage under perturbation of the pruning
   matrix.}
-  Mean global reward for \ddqn{} and the best heuristic as all non-zero
-  pruning values are scaled by a common factor, with the gap shaded.
-  Both policies improve as pruning becomes more effective, but the
-  advantage of the learned policy persists at every scale.}
+  \textbf{(a)}~Mean global reward for \ddqn{} and the best heuristic as
+  all non-zero pruning values are scaled by a common factor; error bars
+  are percentile bootstrap 95\% intervals over the three matched
+  episodes per scale. \textbf{(b)}~The difference between the two
+  curves. Both policies improve as pruning becomes more effective and
+  the advantage of the learned policy is positive at every scale, but
+  the size of that advantage is not monotonic in the scale factor --- it
+  dips to $+$0.0034 at scale 1.0 --- and with three episodes per point
+  the ordering of the gaps across scales is within noise. The claim this
+  figure supports is the sign of the gap, not its shape.}
 \end{figure}
 
 \textbf{Reward weights and cost prices.}
@@ -677,10 +844,22 @@ system predicts accurately (a fitted predictor reaches only
 $R^2 = 0.67$), so a lookahead oracle would bound the model rather than
 the environment.
 
-The result is a negative one, and informative.
+This experiment runs on the \texttt{std1000} protocol (1{,}000 steps),
+not the 500-step protocol used for Table~\ref{tab:ranking}, and the
+oracle's cost --- three trial branches and a rollback at every step, two
+hours of Spark execution per episode --- limited it to a single episode
+on one seed. Both comparators below are therefore \texttt{std1000}
+numbers and are not comparable with the 0.2105 of
+Table~\ref{tab:ranking}, which is a 500-step, 25-episode mean
+(Table~\ref{tab:protocols}).
+
+The result is a negative one, and informative. To make the comparison
+exact we replayed the rule-based agent on the oracle's own environment
+seed, so that both controllers face an identical workload realisation
+rather than being compared across seed blocks.
 \textbf{The greedy oracle scores 0.0546 against the rule-based
-controller's 0.2306 --- it does not upper-bound the design at all.}
-Table~\ref{tab:oracle} shows why: the per-step reward difference between
+controller's 0.2435 on that same realisation --- it does not
+upper-bound the design at all.} Table~\ref{tab:oracle} shows why: the per-step reward difference between
 the three delegations has median 0.0069, while reward noise arising from
 query-latency variation alone has $\sigma = 0.0120$. The selection
 signal lies below the environment's own measurement noise, so the oracle
@@ -704,8 +883,9 @@ suboptimal constants is approximately 8\%.
 \toprule
 \textbf{Quantity} & \textbf{Value} \\
 \midrule
-Rule-based meta-controller, mean global reward   & 0.2306 \\
-Greedy one-step oracle, mean global reward       & 0.0546 \\
+Rule-based meta-controller, \emph{same workload realisation}      & 0.2435 \\
+Rule-based meta-controller, mean over 5 \texttt{std1000} seeds   & 0.2306 \\
+Greedy one-step oracle                                           & 0.0546 \\
 \midrule
 Median per-step spread between the three branch rewards & 0.0069 \\
 Reward noise from query-latency variation alone ($\sigma$) & 0.0120 \\
@@ -715,11 +895,21 @@ Delegation agreement with the rule-based controller & 22.7\% \\
 \bottomrule
 \end{tabular}
 \caption{\label{tab:oracle}\textbf{Why greedy meta-control fails.}
-  The oracle selects among delegations by measured one-step reward after
-  environment rollback. Because the spread between delegations is
-  smaller than the environment's latency-induced reward noise, selection
-  is dominated by noise rather than by signal, and the delayed payoff of
-  maintenance is invisible to a one-step objective.}
+  All values are \texttt{std1000} (1{,}000 steps). The oracle selects
+  among delegations by measured one-step reward after environment
+  rollback. Because the spread between delegations is smaller than the
+  environment's latency-induced reward noise, selection is dominated by
+  noise rather than by signal, and the delayed payoff of maintenance is
+  invisible to a one-step objective. Two rule-based comparators are
+  given. The first is the like-for-like comparison: the rule-based agent
+  replayed on the oracle's own environment seed (35101), so both
+  controllers see the same ingestion and query stream. The second
+  averages five \texttt{std1000} seeds drawn from a different seed block
+  and is quoted only to show that the gap does not depend on the
+  realisation (per-seed range 0.192--0.255). The original submission
+  compared the oracle against the second of these, which was not a
+  paired comparison; the first is. Neither is comparable with the 500-step numbers in
+  Table~\ref{tab:ranking}.}
 \end{table}
 
 \FloatBarrier
@@ -753,11 +943,32 @@ the effect is specific to partition alignment rather than general noise.
 The partition-dependent policies degrade most under mixture, as
 predicted.
 
-This design uses one episode per seed. With $n = 5$ paired observations
+This design uses one episode per seed, against the five episodes per
+seed of the in-distribution protocol. With $n = 5$ paired observations
 an exact two-sided permutation test has a minimum achievable $p$ of
 0.0625, so this study is powered for estimation rather than hypothesis
-testing; we report effect sizes ($\delta$ from $-0.20$ to $-0.44$) and
-intervals rather than claiming significance.
+testing, and we report effect sizes and intervals rather than claiming
+significance.
+
+Two distinct effect sizes are relevant here and we state both
+explicitly, because they carry opposite signs and have been confused in
+our own earlier reporting. The first is \emph{degradation}: each policy
+on a held-out workload against itself in distribution, computed on
+per-seed means. These are negative by construction, ranging from
+$\delta = -0.20$ (\attentive{} and \mlpppo{} under drift) to
+$\delta = -0.44$ (\ddqn{} under both shifts); the near-deterministic
+heuristics reach $\delta = -1.00$ because their tiny, consistent drops
+order perfectly across seeds, which illustrates why $\delta$ must be
+read next to the magnitude it describes --- \texttt{AlwaysCompact\_C128}
+loses 0.2\% of its reward. The second is \emph{superiority}: \ddqn{}
+against each comparator \emph{on} a held-out workload. These are
+positive: $\delta$ from $+0.33$ to $+0.56$ under drift, and from
+$+0.44$ to $+0.76$ under mixture against the learned and workload-aware
+comparators. The one exception is \texttt{AlwaysCompact\_C128} under
+mixture, where the three paired episodes give $\delta = -0.11$ despite
+\ddqn{}'s higher mean (0.1994 versus 0.1898): on that workload the two
+policies are not separated by this design, and we do not claim they
+are.
 
 \begin{table}[!htbp]
 \centering
@@ -785,12 +996,17 @@ intervals rather than claiming significance.
 \begin{figure}[!htbp]
 \centering
 \includegraphics[width=0.86\linewidth]{charts/fig_generalization}
-\caption{\label{fig:generalization}\textbf{Degradation on held-out workloads.}
-  Relative change in mean global reward from the in-distribution
-  baseline for each policy under drifting transitions and concurrent
-  query mixtures. Policies that rely on partition alignment degrade
-  most under mixture; the pure-compaction heuristic is unaffected,
-  isolating the mechanism responsible.}
+\caption{\label{fig:generalization}\textbf{Performance on held-out workloads.}
+  Mean global reward for each policy on the in-distribution baseline
+  (\texttt{eval500}, 5 episodes per seed) and on the two held-out
+  workloads (1 episode per seed); whiskers are percentile bootstrap
+  95\% intervals. Absolute rewards are plotted rather than relative
+  change, so that the held-out intervals --- which are wide, because
+  each rests on one episode per seed --- remain visible. \ddqn{} is the
+  highest-scoring policy under both shifts. Policies that rely on
+  partition alignment degrade most under mixture; the pure-compaction
+  heuristic \texttt{AlwaysCompact\_C128} is unaffected, isolating the
+  mechanism responsible.}
 \end{figure}
 
 \FloatBarrier
@@ -818,54 +1034,110 @@ Third, the runs were initialised from checkpoints affected by the
 pipeline defects described above.
 
 Table~\ref{tab:adaptive} reports the corrected experiment. All three
-architectures are stable and every confidence interval straddles zero.
-\textbf{We therefore withdraw the claim that off-policy value-based
-methods destabilise under online adaptation in this environment}; it was
-an implementation defect, not a property of the algorithm class. We also
-did not pursue the remedies that such a collapse would motivate
-(prioritised replay, shorter target-update intervals, sliding-window
-buffers), because there is no collapse to rescue.
+architectures are stable. \textbf{We therefore withdraw the claim that
+off-policy value-based methods destabilise under online adaptation in
+this environment}; it was an implementation defect, not a property of
+the algorithm class. We also did not pursue the remedies that such a
+collapse would motivate (prioritised replay, shorter target-update
+intervals, sliding-window buffers), because there is no collapse to
+rescue.
 
-The honest reading of Table~\ref{tab:adaptive} is that over a short
-deployment window adaptation is \emph{neutral}. With five 500-step
-episodes each specialist receives roughly 500 transitions and 25
-gradient updates, which measures fine-tuning drift rather than
-substantial online learning --- which is precisely why the intervals
-straddle zero.
+\textbf{Measuring adaptation requires a control run, not a comparison
+against Table~\ref{tab:ranking}.} An adapting agent must explore, so the
+two actor-critics \emph{sample} from their policy and \ddqn{} acts
+$\varepsilon$-greedily, whereas the frozen evaluation behind
+Table~\ref{tab:ranking} is deterministic ($\arg\max$) and draws on a
+different block of environment seeds. Comparing the two therefore
+confounds three things at once: learning, the action-selection rule, and
+the seed block. We separate them with two control arms run under the
+adaptation protocol itself --- identical checkpoints, identical
+environment seeds, identical episode structure --- with weight updates
+disabled:
+
+\begin{itemize}
+\item \textbf{Arm A} (all three architectures): exploration on, updates
+  off. Against the adaptive runs it isolates \emph{learning}.
+\item \textbf{Arm B} (\mlpppo{}): $\arg\max$, updates off. Against arm A
+  it isolates the \emph{action-selection rule}; against
+  Table~\ref{tab:ranking} it isolates the \emph{seed block}.
+\end{itemize}
+
+Arm B settles the last of these immediately: \mlpppo{} under $\arg\max$
+scores 0.1680 on the adaptation seed block against 0.1675 in
+Table~\ref{tab:ranking}, a difference of 0.0005. The seed block is
+irrelevant, and the decomposition in Table~\ref{tab:adaptive} is
+therefore clean.
+
+Two conclusions follow, and the second was invisible before the controls
+were run. First, \textbf{adaptation is neutral for all three
+architectures}: the learning contrasts are $+$0.0012, $+$0.0058 and
+$-$0.0053, none significant after correction within this family of four
+comparisons. With five 500-step episodes each specialist receives
+roughly 500 transitions and 25 gradient updates, which measures
+fine-tuning drift rather than substantial online learning. Second, and
+much larger, \textbf{\mlpppo{} gains $+$0.0355 from sampling rather than
+taking the $\arg\max$} ($p_{\text{Holm}} = 0.0002$, $\delta = +0.72$) ---
+six times the largest learning effect. The mechanism is the train/evaluate
+objective mismatch reported in the Limitations: under $\arg\max$,
+\mlpppo{} places 85\% of its compactions on \cthirtytwo{}, the target its
+specialist reward over-rewards and measured global reward punishes, while
+sampling spreads them across \csixtyfour{} and \conehundredtwentyeight{}
+and lifts its score to the level of the other architectures. The
+architecture that looked like the clearest beneficiary of online
+adaptation was in fact the one most damaged by deterministic action
+selection.
 
 \begin{table}[!htbp]
 \centering
-\begin{tabular}{lccccc}
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccl}
 \toprule
-\textbf{Architecture} & \textbf{Ep.\ 1 $\to$ 5} & \textbf{95\% CI} &
-  \textbf{Adaptive mean} & \textbf{Frozen ceiling} &
-  \textbf{\% gap closed} \\
+\textbf{Architecture} & \textbf{Arm} & \textbf{Mean} &
+  \textbf{95\% CI (seed cluster)} & \textbf{Isolated contrast} \\
 \midrule
-\ddqn{}      & $+$3.8\% & [$-$4.8, $+$11.4] & 0.2092 & 0.2105 & n/a \\
-\mlpppo{}    & $-$4.2\% & [$-$12.9, $+$2.4] & 0.2093 & 0.1675 & n/a \\
-\attentive{} & $+$8.4\% & [$-$5.0, $+$21.9] & 0.1998 & 0.1823 & n/a \\
+\ddqn{}      & Table~\ref{tab:ranking}: $\arg\max$, no updates & 0.2105 & [0.2026, 0.2185] & --- \\
+             & arm A: sampled, no updates                     & 0.2080 & [0.2040, 0.2140] & --- \\
+             & adaptive: sampled $+$ updates                  & 0.2092 & [0.2002, 0.2179] & learning $+$0.0012 ($p = 0.67$) \\
+\midrule
+\mlpppo{}    & Table~\ref{tab:ranking}: $\arg\max$, no updates & 0.1675 & [0.1481, 0.1870] & --- \\
+             & arm B: $\arg\max$, no updates, adaptation seeds & 0.1680 & [0.1479, 0.1881] & seed block $+$0.0005 \\
+             & arm A: sampled, no updates                     & 0.2035 & [0.1962, 0.2104] & \textbf{selection $+$0.0355} ($p = 0.0002$) \\
+             & adaptive: sampled $+$ updates                  & 0.2093 & [0.2019, 0.2166] & learning $+$0.0058 ($p = 0.058$) \\
+\midrule
+\attentive{} & Table~\ref{tab:ranking}: $\arg\max$, no updates & 0.1823 & [0.1481, 0.2121] & --- \\
+             & arm A: sampled, no updates                     & 0.2051 & [0.1927, 0.2163] & --- \\
+             & adaptive: sampled $+$ updates                  & 0.1998 & [0.1943, 0.2054] & learning $-$0.0053 ($p = 0.67$) \\
 \bottomrule
-\end{tabular}
-\caption{\label{tab:adaptive}\textbf{Online adaptation over five consecutive episodes.}
-  Change from the first to the fifth adaptation episode with bootstrap
-  95\% confidence intervals over five seeds. All intervals straddle
-  zero: adaptation neither helps nor harms materially over this window,
-  and no architecture collapses. The ``\% gap closed'' metric is
-  reported as \texttt{n/a} whenever the initial gap to the frozen
-  ceiling is below 0.01, because the ratio is numerically unstable at
-  that scale; the guard is implemented in the released analysis code
-  rather than applied by hand.}
+\end{tabular}}
+\caption{\label{tab:adaptive}\textbf{Online adaptation, decomposed against its own
+  controls.}
+  Every arm runs five consecutive 500-step episodes on each of five
+  seeds (25 episodes) from the same checkpoints and the same environment
+  seeds, so the contrasts are paired episode by episode. Intervals are
+  seed-cluster bootstraps. $p$-values are Holm-corrected across the four
+  contrasts in this family; the uncorrected value for the \mlpppo{}
+  learning contrast is 0.019. The frozen arms are verified frozen: they
+  record zero gradient updates and exactly zero loss. We report no
+  ``\% of gap closed'' figure: with a control arm available the
+  comparison is a difference between measured arms, and the ratio that
+  metric formed was unstable whenever an agent began near its
+  reference.}
 \end{table}
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.74\linewidth]{charts/fig_adaptive}
-\caption{\label{fig:adaptive}\textbf{Online adaptation trajectories.}
-  Mean global reward per adaptation episode, averaged over five seeds
-  per architecture; shaded bands are $\pm$1 standard error. Trajectories
-  are flat within noise and the bands overlap throughout, supporting the
-  conclusion that adaptation is neutral over a short deployment window
-  for all three architectures.}
+\includegraphics[width=0.86\linewidth]{charts/fig_adaptive}
+\caption{\label{fig:adaptive}\textbf{Online adaptation against its controls.}
+  Mean global reward per episode, averaged over five seeds; bands are
+  $\pm$1 standard error. Solid lines are the adapting agents, dashed
+  lines the frozen control (arm A: same checkpoints, same environment
+  seeds, exploration on, weight updates off). The two lie within each
+  other's bands throughout for all three architectures, which is the
+  direct evidence that adaptation is neutral over this window. For
+  \mlpppo{} the dotted line adds arm B ($\arg\max$, no updates), whose
+  separation from the others is the action-selection effect that the
+  original frozen-versus-adaptive comparison mistook for learning.}
 \end{figure}
 
 \FloatBarrier
@@ -1116,6 +1388,66 @@ state this plainly rather than presenting cost as a further advantage.
   total and not visible at this scale.}
 \end{figure}
 
+\subsection*{How much of measured query latency is scan work?}
+\label{sec:latencyfloor}
+
+Query latency enters the global reward directly, and at this simulation's
+scale a reader is entitled to ask how much of it is actual scan cost and
+how much is the fixed price of submitting a Spark job. We measured this
+directly. Holding the data exactly constant --- 20{,}000 rows,
+1.7\,MB consolidated --- we rewrote the table at file counts from 14
+(the fewest the \conehundredtwentyeight{} target can produce for that
+volume) to 448, and timed all five query templates 30 times at each,
+with the same cache-clearing discipline the environment uses.
+
+Two floors bound the fixed cost. A \texttt{SELECT 1}, which touches no
+table, takes 55\,ms; a query against a single-row table --- catalog
+resolution, planning, job submission, one file opened, no scan work ---
+takes 93\,ms averaged over the five templates. \textbf{Between a quarter
+and a half of the latencies reported in Table~\ref{tab:ranking} is
+therefore fixed overhead that no maintenance policy can remove}: 42\%
+for \ddqn{} at 37 files, 47\% for \texttt{AlwaysCompact\_C128} at 22
+files, and 28--29\% for the policies that leave 50--62 files behind.
+The reviewer-anticipated concern is real, and we now state it as a
+limitation.
+
+It does not, however, make the latency term constant. Above the floor,
+latency is almost perfectly linear in file count over the measured range
+(Table~\ref{tab:latencyfloor}; ordinary least squares gives
+$135 + 4.99 \times \text{files}$\,ms with $r = 0.999$), rising from
+242\,ms at 21 files to 2{,}380\,ms at 448. The consequence is different
+from, and more interesting than, a constant latency term:
+\textbf{at this scale the latency term is very nearly a second
+measurement of the file-count term}. The two components of the global
+reward that we weight independently are in fact strongly collinear here,
+so the effective objective is weighted towards file count more heavily
+than the nominal weights suggest --- which is a defect of the reward
+decomposition at micro-scale, and one that would relax at production
+volumes where per-file overhead is amortised over far more data per
+file. We report it as such rather than as a property of the method.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{Files} & 14 & 21 & 28 & 56 & 112 & 448 \\
+\midrule
+Mean latency (ms) & 265 & 242 & 243 & 394 & 689 & 2{,}380 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:latencyfloor}\textbf{Query latency against file count at
+  constant data.}
+  The same 20{,}000 rows (1.7\,MB) rewritten into a varying number of
+  files; mean of the median latency of each of the five query templates,
+  30 timed repetitions each. Reference floors: \texttt{SELECT 1} 55\,ms,
+  single-row table 93\,ms. A fit over the full sweep (which also includes
+  224 files) gives $135 + 4.99\times\text{files}$\,ms, $r = 0.999$. The
+  slope is specific to this data volume --- bytes per file differ from
+  the policies' operating points --- so we use the sweep for the shape of
+  the dependence and the floors for the fixed cost, and do not
+  extrapolate the slope to Table~\ref{tab:ranking}.}
+\end{table}
+
 \FloatBarrier
 
 % ════════════════════════════════════════════════════════════════════════════
@@ -1125,11 +1457,15 @@ state this plainly rather than presenting cost as a further advantage.
 
 \textbf{Joint control is necessary, and the interaction is
 non-additive.}
-The ablation in Table~\ref{tab:ablation} shows that partitioning without
-compaction does not deliver pruning: the partition specialist acting
-alone reaches only 0.080 pruning against the 0.225 the same specialist
-achieves within the full agent, because data is never rewritten into the
-declared layout. This is the clearest architectural argument in the
+Partitioning without compaction does not deliver pruning: the partition
+specialist acting alone reaches only 0.080 pruning against the 0.225 the
+same specialist achieves within the full agent, because data is never
+rewritten into the declared layout. We observe this on both architectures
+we ablated --- \attentive{} (Table~\ref{tab:ablation}) and \ddqn{}, where
+the collapse is sharper still at 0.030 against 0.204
+(Table~\ref{tab:ablationddqn}) --- which is what we would expect of a
+mechanism that belongs to the storage layer rather than to the policy.
+This is the clearest architectural argument in the
 paper, and it has a direct implication for system design: an
 auto-optimisation subsystem that triggers compaction and clustering
 independently, on separate thresholds, cannot exploit this interaction.
@@ -1156,6 +1492,25 @@ evaluate one checkpoint is strong; our own original submission did
 exactly that. Figure~\ref{fig:seedvar} is the direct evidence that this
 is not sufficient.
 
+\textbf{How a policy is queried can matter more than whether it keeps
+learning.}
+Our original submission compared adapting agents against frozen ones
+without noticing that the two were queried differently --- the adapting
+agent samples from its policy because it must explore, the frozen one
+takes the $\arg\max$. Controlling for that (Table~\ref{tab:adaptive})
+turns the apparent benefit of online adaptation for \mlpppo{} into a
+benefit of stochastic action selection, six times larger than anything
+learning contributed. The reason is specific and, we think, general:
+when a specialist's training reward is misaligned with the objective it
+is evaluated on, the $\arg\max$ commits fully to the misalignment ---
+here, 85\% of compactions on \cthirtytwo{} --- while sampling hedges
+across actions and recovers much of the loss. A practitioner reading
+only mean reward would conclude that this agent needs online learning.
+It does not; it needs either an aligned reward or a stochastic execution
+policy. We report this as the clearest methodological lesson of the
+revision: an evaluation protocol must hold action selection fixed across
+the conditions it compares, or the comparison measures the protocol.
+
 \textbf{Greedy meta-control fails for a measurable reason.}
 The oracle experiment (Table~\ref{tab:oracle}) is a negative result we
 consider transferable. When the per-step difference between candidate
@@ -1166,15 +1521,29 @@ that its cooldowns encode temporal structure --- the delayed payoff of
 maintenance --- which a one-step objective cannot represent.
 
 \textbf{Trajectory-identity leakage in offline RL on operational logs.}
-The leakage described in the Corrections subsection is, we believe, the
-most broadly applicable finding here. Any feature that counts time since
-an event will encode the identity of the behaviour policy that generated
-the trajectory whenever logs are pooled across policies with different
-action frequencies. Advantage-weighted regression and related
-behaviour-cloning objectives will exploit that shortcut in preference to
-the state features one intends them to learn. Detecting it requires a
-counterfactual probe --- holding the state fixed and varying only the
-suspect feature --- rather than any aggregate validation metric.
+The leakage described in the Corrections subsection is a specific
+instance of a documented phenomenon --- causal confusion in imitation
+learning\textsuperscript{10}, and its ``copycat'' variant when
+observation histories are
+available\textsuperscript{11} --- and we present it as such rather
+than as a new failure mode. What we believe is new, and what makes it
+worth reporting to a systems audience, is the specialisation: in
+operational logs, the shortcut is not the logged previous action but
+\emph{time since an event}. Any feature counting steps since a
+maintenance operation encodes the identity of the behaviour policy that
+generated the trajectory whenever logs are pooled across policies with
+different action frequencies, and such features are standard in systems
+telemetry precisely because they are cheap and informative.
+Advantage-weighted regression and related behaviour-cloning objectives
+exploit that shortcut in preference to the state features one intends
+them to learn. The practical consequence is a detection recipe:
+aggregate validation metrics cannot see it --- the cloned policy
+predicts held-out actions well, because it has learned the behaviour
+policy that produced them --- and a counterfactual probe is required,
+holding the table state fixed and sweeping only the suspect feature. We
+report this as the finding most likely to transfer outside lakehouse
+maintenance, since pooling logs from several operational policies is the
+normal way such datasets are assembled.
 
 \textbf{Relationship to commercial auto-optimisation.}
 A direct empirical comparison with Databricks, Snowflake or BigQuery
@@ -1229,13 +1598,27 @@ than as a set-valued action. These are design arguments, not results.
 
 \textbf{Limitations.}
 We state the following plainly.
-\emph{(i)~Scale.} \env{} is backed by a real Iceberg table on real
-Spark with genuine Parquet files, genuine compaction, genuine partition
-evolution and \emph{measured} query latency, but the tables reach only
-4--5\,MB. At this scale latency is dominated by per-file overhead rather
-than data volume, so the latency--file-count relationship is likely
-steeper than in production. External validity to production-scale
-deployments is untested.
+\emph{(i)~Scale, and what it does to the reward.} \env{} is backed by a
+real Iceberg table on real Spark with genuine Parquet files, genuine
+compaction, genuine partition evolution and \emph{measured} query
+latency, but the tables are small: over a 1{,}000-step episode the table
+averages 4.4\,MB and peaks at 8.3\,MB under a maintaining policy
+(13.8\,MB when maintenance is withheld). We measured what this implies
+for the reward rather than leaving it as an assertion (see \emph{How
+much of measured query latency is scan work?}). Two consequences follow,
+and both qualify our results. First, 28--47\% of the query latency in
+Table~\ref{tab:ranking} is fixed overhead --- planning, job submission,
+catalog resolution --- that no policy can remove, so the latency
+differences we report are differences in a minority share of the total.
+Second, above that floor latency is almost perfectly linear in file
+count at this scale ($r = 0.999$), which means the latency and
+file-count terms of the global reward are strongly collinear and the
+effective objective is weighted towards file count more than the nominal
+weights imply. Neither effect changes the ranking --- \ddqn{} wins on
+both terms --- but both would behave differently at production volumes,
+where a file holds orders of magnitude more data and scan cost dominates
+per-file overhead. External validity to production-scale deployments
+remains untested.
 \emph{(ii)~The pruning matrix is assumed, not measured.} We tested
 sensitivity to it (Table~\ref{tab:pruningscale}) and the conclusions
 hold, but we did not instrument Spark's scan metrics to measure
@@ -1268,7 +1651,21 @@ so a substantially different schema would change achievable pruning.
 This is argued, not demonstrated.
 \emph{(vii)~Short adaptation window.} The online experiments span five
 episodes and roughly 25 gradient updates per specialist, which measures
-fine-tuning drift rather than substantial online learning.
+fine-tuning drift rather than substantial online learning. The neutral
+result in Table~\ref{tab:adaptive} is therefore a statement about this
+window and not about whether these architectures can learn online at
+all; establishing the latter needs a budget an order of magnitude
+larger.
+\emph{(viii)~No conservative offline objective.} The specialists are
+trained with standard Double DQN and offline PPO-clip. We report action
+coverage (Table~\ref{tab:coverage}) to show that the out-of-distribution
+regime these methods guard against is largely absent from our pools, but
+coverage is not density: the partition specialist learns five actions
+from 4{,}990 transitions logged by three behaviour policies, with
+336--371 examples of each non-\noop{} action. A conservative objective
+(CQL\textsuperscript{26}, IQL\textsuperscript{27},
+BCQ\textsuperscript{28}) would be the safer choice at that sample size,
+and we have not measured what it would change.
 
 \FloatBarrier
 
@@ -1294,16 +1691,17 @@ Real: the Iceberg table, the Parquet files, the
 \texttt{rewrite\_data\_files} compaction, partition-spec evolution, and
 query latency, which is measured by executing the query. Simulated: the
 data, which is synthetic; the query set, which comprises five templates;
-the scale, which reaches 4--5\,MB rather than production volumes; and
+the scale, which averages 4.4\,MB and peaks at 8.3\,MB over an episode
+rather than reaching production volumes; and
 the pruning benefit, which is applied from the assumed matrix in
 Table~\ref{tab:pruning} rather than measured from scan metrics.
 
 \textbf{Table schema.}
-The table contains eight columns: \texttt{device\_id} (string),
-\texttt{timestamp} (timestamp), \texttt{temperature} (double),
-\texttt{humidity} (double), \texttt{region} (string),
-\texttt{event\_type} (string), \texttt{sensor\_value} (double),
-and \texttt{payload} (string, length~100). Each row occupies
+The table contains eight columns: \texttt{event\_ts} (timestamp),
+\texttt{sensor\_id} (string), \texttt{region} (string),
+\texttt{event\_type} (string), \texttt{temperature} (float),
+\texttt{humidity} (float), \texttt{status} (string), and
+\texttt{payload} (string, length~100). Each row occupies
 approximately 200~bytes; the default target file size is 64\,KB,
 corresponding to roughly 50~rows per Parquet file.
 
@@ -1357,7 +1755,8 @@ normal load 2 (75, steps 701--900), and wind-down (35, steps 901--1{,}000).
 The v5 evaluation workload is a 2$\times$-compressed 500-step version.
 Figure~\ref{fig:workload} illustrates the schedule.
 
-The two held-out workloads used in Section~\ref{sec:generalization}
+The two held-out workloads used in \emph{Generalization to held-out
+workloads}
 extend this specification. \texttt{drift500} replaces abrupt profile
 transitions with linear interpolation of query-type probabilities over
 50-step windows; \texttt{mixed500} samples each step from a 50/50
@@ -1537,7 +1936,7 @@ expose a common interface returning an action distribution and a scalar
 state-value estimate.
 
 \textit{\attentive{}} uses a Transformer-style
-encoder\textsuperscript{10}:
+encoder\textsuperscript{33}:
 input $\to$ Dense(64, ReLU) $+$ trainable positional encoding
 $\to$ multi-head self-attention (4 heads, key dimension 64,
 dropout 0.1) $+$ residual $+$ LayerNorm
@@ -1549,12 +1948,12 @@ critic Dense(1).
 input $\to$ Flatten $\to$ Dense(256, ReLU) $\to$ Dense(128, ReLU)
 $\to$ Dropout(0.1); actor: Dense(64, ReLU) $\to$ Dense($N_a$, softmax);
 critic: Dense(64, ReLU) $\to$ Dense(1).
-\textit{\matchedmlp{}}, used as the capacity control in
-Section~\ref{sec:attention}, is the same topology with hidden widths
+\textit{\matchedmlp{}}, used as the capacity control in \emph{What the
+attention encoder actually does}, is the same topology with hidden widths
 solved per specialist to match \attentive{}'s parameter count to within
 0.06\% --- $(128, 288)$ for compaction and $(128, 192)$ for partition.
 
-\textit{\ddqn{}} is a dueling double DQN\textsuperscript{11,29}:
+\textit{\ddqn{}} is a dueling double DQN\textsuperscript{34,35}:
 input $\to$ Flatten $\to$ Dense(256, ReLU) $\to$ BatchNorm $\to$
 Dense(128, ReLU) $\to$ BatchNorm; value stream: Dense(64, ReLU) $\to$
 $V(s)$; advantage stream: Dense(64, ReLU) $\to$ $A(s,a)$. The streams
@@ -1576,7 +1975,7 @@ with the target network synchronised every 50 gradient steps.
 For interface uniformity the model additionally exposes
 $\mathrm{softmax}(Q)$; all value updates operate on raw $Q$-values
 (this was the site of the online-adaptation defect reported in
-Section~\ref{sec:adaptive}).
+\emph{Online adaptation}).
 
 \begin{figure}[!htbp]
   \centering
@@ -1620,15 +2019,86 @@ between training and serving. Actions are sampled in a balanced manner
 during offline training, and advantages are standardised per action, so
 that the majority \noop{} class cannot dominate the objective.
 
+\textbf{Action coverage, and why no conservative regulariser is used.}
+The specialists are trained with standard Double DQN and offline
+PPO-clip, without pessimism or conservative regularisation
+(CQL\textsuperscript{26}, IQL\textsuperscript{27},
+BCQ\textsuperscript{28}). Those methods exist to control value
+overestimation on \emph{out-of-distribution actions}: when a fixed
+dataset never shows what an action does in a given region of state
+space, a bootstrapped value estimate for it is unconstrained, and the
+greedy policy is drawn towards exactly those unconstrained estimates.
+Balanced action sampling, which we do apply, addresses class imbalance
+and not this; the two are different properties, and only coverage bears
+on extrapolation.
+
+We therefore report coverage directly (Table~\ref{tab:coverage}). Both
+pools contain every action of their specialist, each of them several
+hundred times at minimum, and --- more to the point --- each action
+appears across essentially the whole observed range of file count, the
+state variable that drives maintenance decisions: 10 of 10 file-count
+deciles for seven of the nine actions, and 9 of 10 for the other two.
+There is no action in either pool that the data leaves unconstrained,
+which is the condition under which the pessimism these methods provide
+would change the learned policy. The action sets are also small (4 and
+5) and discrete, so there is no continuous action space in which a
+maximiser can drift off-support.
+
+We state the limits of that argument plainly. Coverage is not density:
+the partition pool's non-\noop{} actions rest on 336--371 transitions
+each, drawn from only three behaviour policies, and coverage of the
+file-count marginal does not establish coverage of the joint state
+distribution. A conservative objective would be the safer default for
+the partition specialist on a pool that size, and we did not run one;
+comparing a CQL- or IQL-trained partition specialist against the present
+one is the natural next experiment, and we flag it as a limitation
+rather than claiming the choice was without cost.
+
+\begin{table}[!htbp]
+\centering
+\begin{tabular}{llrrcc}
+\toprule
+\textbf{Pool} & \textbf{Action} & \textbf{Count} & \textbf{Share} &
+  \textbf{Behaviour policies} & \textbf{File-count deciles} \\
+\midrule
+Compaction & \noop{}                & 11{,}313 & 66.6\% & 12 & 10/10 \\
+(17{,}000) & \cthirtytwo{}          &  1{,}986 & 11.7\% &  6 & 10/10 \\
+           & \csixtyfour{}          &  2{,}145 & 12.6\% &  8 & 10/10 \\
+           & \conehundredtwentyeight{} & 1{,}556 &  9.2\% &  6 & \phantom{0}9/10 \\
+\midrule
+Partition  & \noop{}                &  3{,}570 & 71.5\% &  3 & 10/10 \\
+(4{,}990)  & \texttt{PARTITION\_HOUR}       & 371 & 7.4\% & 3 & 10/10 \\
+           & \texttt{PARTITION\_REGION}     & 350 & 7.0\% & 3 & \phantom{0}9/10 \\
+           & \texttt{PARTITION\_EVENT\_TYPE} & 363 & 7.3\% & 3 & 10/10 \\
+           & \texttt{REMOVE\_PARTITION}     & 336 & 6.7\% & 2 & 10/10 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:coverage}\textbf{Action coverage of the two offline pools.}
+  Counts are after the action filter each specialist applies. ``Behaviour
+  policies'' is the number of distinct logged policies that ever take the
+  action, and ``file-count deciles'' is the number of deciles of the
+  pool's file-count distribution in which the action appears at least
+  once --- a coarse measure of how widely through state space the action
+  is supported. No action is absent, and none is confined to a narrow
+  region. Reproduced by
+  \texttt{revision/stats/analyze\_action\_coverage.py}.}
+\end{table}
+
 To make the architecture comparison in Table~\ref{tab:threeway}
 meaningful, all three architectures use an identical configuration:
 the same data pools, 150 epochs for the compaction specialist and 200
 for the partition specialist, batch size 64, and the same five random
 seeds $\{1,2,3,4,5\}$. Architecture-specific hyperparameters are listed
-in Table~\ref{tab:hyper}. Because the objectives differ by architecture
-(offline PPO-clip for the two actor-critics, Double-DQN for the
-value-based model), the comparison is between architecture--objective
-pairings and not between encoders in isolation; the capacity-matched
+in Table~\ref{tab:hyper}, and every checkpoint carries a training
+manifest recording the objective actually used. We note for clarity that
+the archive also contains an attention agent trained with
+advantage-weighted regression\textsuperscript{32} --- the recipe used in
+our original submission --- which is \emph{not} the agent reported here:
+all results labelled \attentive{} in this paper are the PPO-clip variant
+trained under the matched configuration above. Because the objectives differ by architecture
+(offline PPO-clip\textsuperscript{36} for the two actor-critics,
+Double-DQN for the value-based model), the comparison is between
+architecture--objective pairings and not between encoders in isolation; the capacity-matched
 control in Table~\ref{tab:matched} isolates the encoder specifically.
 
 \begin{table}[!htbp]
@@ -1639,8 +2109,8 @@ control in Table~\ref{tab:matched} isolates the encoder specifically.
 \textbf{Variant} & \textbf{Objective} & \textbf{LR} & $\gamma$ &
   \textbf{Entropy} & \textbf{Clip / target} & \textbf{Params} \\
 \midrule
-\attentive{} (compaction) & offline PPO-clip & $3\times10^{-4}$ & 0.95 & 0.01 & --- & 84{,}741 \\
-\attentive{} (partition)  & offline PPO-clip & $3\times10^{-4}$ & 0.99 & 0.10 & --- & 85{,}830 \\
+\attentive{} (compaction) & offline PPO-clip & $3\times10^{-4}$ & 0.95 & 0.01 & clip 0.2 & 84{,}741 \\
+\attentive{} (partition)  & offline PPO-clip & $3\times10^{-4}$ & 0.99 & 0.10 & clip 0.2 & 85{,}830 \\
 \mlpppo{} (compaction)    & offline PPO-clip & $3\times10^{-4}$ & 0.95 & 0.01 & clip 0.2 & 70{,}469 \\
 \mlpppo{} (partition)     & offline PPO-clip & $3\times10^{-4}$ & 0.99 & 0.10 & clip 0.2 & 121{,}734 \\
 \ddqn{} (compaction)      & Double DQN & $1\times10^{-4}$ & 0.95 & --- & target 50 & 71{,}237 \\
@@ -1657,11 +2127,22 @@ control in Table~\ref{tab:matched} isolates the encoder specifically.
 \end{table}
 
 \textbf{Online adaptation.}
-For the experiments in Section~\ref{sec:adaptive}, agents begin from a
+For the experiments in \emph{Online adaptation}, agents begin from a
 frozen checkpoint and update weights during rollout: PPO for the two
 actor-critics and Double-DQN with a replay buffer for \ddqn{}. The
 exploration rate decays from $\varepsilon = 0.10$ over 200 environment
 steps, decremented once per environment step.
+
+\textbf{Action selection differs between the frozen and adapting
+regimes, and the difference is not incidental.} Frozen evaluation is
+deterministic: the specialist returns $\arg\max$ over its action
+distribution. During adaptation the agents must explore, so \ddqn{} acts
+$\varepsilon$-greedily and the two actor-critics \emph{sample} from
+their own softmax. A comparison between a frozen and an adapting run
+therefore confounds learning with action selection, which is why the
+frozen control reported in \emph{Online adaptation} was run under the
+adapting protocol with weight updates disabled rather than reused from
+Table~\ref{tab:ranking}.
 
 \FloatBarrier
 
@@ -1723,23 +2204,107 @@ comparisons are paired. Heuristic policies are evaluated on the same
 environment seeds.
 
 \textbf{Protocols.}
-The primary protocol is the 500-step evaluation workload; the 1{,}000-step
-standard workload is reported as a concordance check (Spearman
-$\rho = 0.964$). Held-out protocols \texttt{drift500} and
-\texttt{mixed500} are described above.
+The primary protocol is the 500-step evaluation workload
+(\texttt{eval500}); the 1{,}000-step standard workload (\texttt{std1000})
+is reported as a concordance check (Spearman $\rho = 0.964$). Held-out
+protocols \texttt{drift500} and \texttt{mixed500} are described above.
+
+The sub-studies in this paper do \emph{not} all run at the same budget:
+the sensitivity sweeps and the oracle experiment are far more expensive
+per configuration than a single policy evaluation, and were scoped
+accordingly. Table~\ref{tab:protocols} states exactly which protocol
+produced every reported number, because several quantities that look
+comparable are not. In particular, \ddqn{} appears at three different
+values in this paper --- 0.2105, 0.2033 and 0.2306 --- and all three are
+the same agent under the rule-based meta-controller, measured under
+three different protocols. Each results subsection names its protocol in
+its opening sentence, and every table caption repeats it.
+
+\begin{table}[!htbp]
+\centering
+\setlength{\tabcolsep}{4pt}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llcccl}
+\toprule
+\textbf{Reported in} & \textbf{Protocol} & \textbf{Steps} &
+  \textbf{Seeds} & \textbf{Episodes/seed} & \textbf{Action selection} \\
+\midrule
+Tables~\ref{tab:ranking}, \ref{tab:significance}, \ref{tab:threeway} & \texttt{eval500} & 500 & 5 & 5 & greedy $\arg\max$ \\
+Table~\ref{tab:ablation} (ablations) & \texttt{eval500} & 500 & 5 / 3$^{\ddagger}$ & 5 & greedy $\arg\max$ \\
+Table~\ref{tab:meta} (meta-controller sweep) & \texttt{eval500} & 500 & 3 & 1 & greedy $\arg\max$ \\
+Table~\ref{tab:pruningscale} (pruning scale) & \texttt{eval500} & 500 & 3 & 1 & greedy $\arg\max$ \\
+Table~\ref{tab:oracle} (oracle) & \texttt{std1000} & 1{,}000 & 1$^{\S}$ & 1 & one-step rollback oracle \\
+Table~\ref{tab:generalization} (held-out) & \texttt{drift500} / \texttt{mixed500} & 500 & 5 / 3$^{\ddagger}$ & 1 & greedy $\arg\max$ \\
+Table~\ref{tab:adaptive} (adaptation) & \texttt{eval500} plan & 500 & 5 & 5 consecutive & sampled / $\varepsilon$-greedy \\
+Table~\ref{tab:adaptive} (control arm A) & \texttt{eval500} plan & 500 & 5 & 5 consecutive & sampled / $\varepsilon$-greedy \\
+Table~\ref{tab:adaptive} (control arm B) & \texttt{eval500} plan & 500 & 5 & 5 consecutive & greedy $\arg\max$ \\
+Table~\ref{tab:ablationddqn} (\ddqn{} ablation) & \texttt{eval500} & 500 & 5 / 3$^{\ddagger}$ & 5 / 1$^{\ddagger}$ & greedy $\arg\max$ \\
+Table~\ref{tab:matched} (capacity control) & \texttt{eval500} & 500 & 5 & 5 & greedy $\arg\max$ \\
+\bottomrule
+\end{tabular}}
+\caption{\label{tab:protocols}\textbf{Evaluation protocol for every reported
+  result.}
+  Protocol names map one-to-one onto the workload plans in the archived
+  repository: \texttt{std1000} $\rightarrow$
+  \texttt{workload\_plan\_v5.json}, \texttt{eval500} $\rightarrow$
+  \texttt{workload\_plan\_v5\_eval.json}, \texttt{drift500} $\rightarrow$
+  \texttt{workload\_plan\_v5\_drift.json}, \texttt{mixed500}
+  $\rightarrow$ \texttt{workload\_plan\_v5\_mixed.json}. Environment
+  seeds are a deterministic function of (protocol, seed slot, episode)
+  and are independent of the policy, so policies evaluated under the same
+  protocol are compared on identical episodes.
+  Different protocols draw from \emph{different} environment-seed
+  blocks, so numbers from different rows of this table are not paired
+  and small differences between them carry no meaning.
+  $^{\ddagger}$Heuristics and \texttt{PartitionOnly} were run on 3 seeds
+  where their across-seed variability is negligible (s.d.\ 0.0002--0.002)
+  or the runs are prohibitively slow --- a \texttt{PartitionOnly} episode
+  costs 36 minutes of Spark execution against 7 for an ordinary policy,
+  because the table it leaves behind holds over a thousand files. $^{\S}$The oracle requires three
+  trial branches and a rollback per step; one 1{,}000-step episode costs
+  two hours of Spark execution, so it was run on one seed.}
+\end{table}
 
 \textbf{Statistical methods.}
 Uncertainty on means is reported as percentile bootstrap 95\% confidence
-intervals with 10{,}000 resamples\textsuperscript{32} computed over
-independent episodes, never over autocorrelated within-episode steps.
-Across-seed standard deviation is reported separately, because it
-measures training-run variability that a confidence interval on the
-pooled mean does not. Paired comparisons use both the Wilcoxon
-signed-rank test and an exact paired permutation test; effect sizes are
-Cliff's $\delta$\textsuperscript{34} with thresholds 0.147 (small), 0.33
-(medium) and 0.474 (large). Multiplicity is controlled with
-Holm--Bonferroni correction\textsuperscript{33} within each comparison
-family. Where a design cannot reach $p < 0.05$ --- the sensitivity sweep
+intervals with 10{,}000 resamples\textsuperscript{37}, computed over
+independent episodes and never over autocorrelated within-episode steps.
+
+We report \emph{two} intervals, because the evaluation design is
+hierarchical: 25 episodes are nested within 5 training seeds, and
+episodes sharing a seed share a policy. An ordinary bootstrap over the
+pooled 25 episodes treats seed-level and episode-level variation as
+exchangeable, and therefore estimates the precision of \emph{this}
+agent's mean rather than the performance of a newly trained one. We
+therefore also report a \emph{cluster
+bootstrap}\textsuperscript{38} that resamples the five training
+seeds with replacement, carrying each drawn seed's episodes
+with it. This is the appropriate interval for the quantity a
+practitioner cares about, and it is wider --- for \ddqn{},
+[0.2026, 0.2185] against [0.2050, 0.2155]. It is quoted in the Abstract
+and reported alongside the episode-level interval in
+Table~\ref{tab:ranking}. With five clusters the interval is necessarily
+coarse; that coarseness is an honest reflection of how many independent
+training runs were performed, not a defect of the estimator. Across-seed
+standard deviation is reported in addition, because it exposes the
+spread the interval summarises.
+
+Paired comparisons use both the Wilcoxon signed-rank test and a paired
+permutation test (exact for $n \leq 20$, Monte Carlo with 20{,}000
+sign-flips above that, giving a smallest attainable raw $p$ of
+$5\times10^{-5}$); effect sizes are Cliff's
+$\delta$\textsuperscript{39} with thresholds 0.147 (small), 0.33
+(medium) and 0.474 (large). Pairing is resolved per comparison, on the
+environment seeds the two policies share, so a policy evaluated on fewer
+seeds does not silently truncate unrelated comparisons. Multiplicity is
+controlled with Holm--Bonferroni correction\textsuperscript{40} within
+each comparison family. As a secondary check at the level the cluster
+bootstrap uses, the headline comparison was repeated on the five
+per-seed means: all five \ddqn{} seeds exceed the best heuristic
+($\delta = +1.00$), which is the most extreme outcome the design can
+produce, and the exact permutation test on $n=5$ therefore returns its
+floor of $p = 0.0625$. We report that floor rather than presenting the
+seed-level test as evidence of no effect. Where a design cannot reach $p < 0.05$ --- the sensitivity sweep
 ($n=3$, floor $p = 0.25$) and the generalization study ($n=5$, floor
 $p = 0.0625$) --- we report intervals and effect sizes and state that the
 study is powered for estimation rather than hypothesis testing.
@@ -1811,40 +2376,20 @@ scale.
   tuning system using deep reinforcement learning. In \textit{Proc. ACM
   SIGMOD} 415--432 (ACM, 2019).
 
-\item Vaswani, A. \textit{et al.} Attention is all you need. In
-  \textit{Advances in Neural Information Processing Systems (NeurIPS)}
-  vol.~30 (2017).
+\item de Haan, P., Jayaraman, D. \& Levine, S. Causal confusion in
+  imitation learning. In \textit{Adv. Neural Inf. Process. Syst.}
+  \textbf{32}, 11698--11709 (2019).
 
-\item Wang, Z. \textit{et al.} Dueling network architectures for deep
-  reinforcement learning. In \textit{Proc. ICML} 1995--2003 (2016).
-
-\item Dayan, N., Athanassoulis, M. \& Idreos, S. Dostoevsky: Better
-  space-time trade-offs for LSM-tree based key-value stores via adaptive
-  removal of superfluous merging. In \textit{Proc. ACM SIGMOD} 505--520
-  (ACM, 2018).
-
-\item Schulman, J. \textit{et al.} Proximal policy optimization algorithms.
-  \textit{arXiv} preprint arXiv:1707.06347 (2017).
-
-\item Camacho-Rodr\'{\i}guez, J. \textit{et al.} LST-Bench: Benchmarking
-  Log-Structured Tables in the Cloud. In \textit{Proc. ACM SIGMOD}
-  1--14 (ACM, 2024).
-
-\item Armbrust, M. \textit{et al.} Lakehouse: A New Generation of Open
-  Platforms that Unify Data Warehousing and Advanced Analytics. In
-  \textit{Proc. CIDR} (2021).
+\item Wen, C., Lin, J., Darrell, T., Jayaraman, D. \& Gao, Y. Fighting
+  copycat agents in behavioral cloning from observation histories. In
+  \textit{Adv. Neural Inf. Process. Syst.} \textbf{33}, 2564--2575
+  (2020).
 
 \item Yang, Z. \textit{et al.} Qd-tree: Learning Data Layouts for Big
   Data Analytics. In \textit{Proc. ACM SIGMOD} 170--184 (ACM, 2020).
 
 \item Kraska, T. \textit{et al.} SageDB: A Learned Database System. In
   \textit{Proc. CIDR} (2019).
-
-\item Pavlo, A. \textit{et al.} Self-Driving Database Management Systems.
-  In \textit{Proc. CIDR} (2017).
-
-\item Marcus, R. \textit{et al.} Neo: A Learned Query Optimizer.
-  \textit{Proc. VLDB Endow.} \textbf{12}, 1705--1718 (2019).
 
 \item Li, G. \textit{et al.} QTune: A Query-Aware Database Tuning System
   with Deep Reinforcement Learning. \textit{Proc. VLDB Endow.}
@@ -1870,36 +2415,80 @@ scale.
   via Multi-LLMs Experts Guided Deep Reinforcement Learning.
   \textit{IEEE Access} \textbf{12}, 1--15 (2024).
 
-\item Zhang, K., Yang, Z. \& Ba\c{s}ar, T. Multi-Agent Reinforcement
-  Learning: A Selective Overview of Theories and Algorithms.
-  \textit{J. Mach. Learn. Res.} \textbf{22}, 1--85 (2021).
-
-\item Vezhnevets, A. S. \textit{et al.} FeUdal Networks for Hierarchical
-  Reinforcement Learning. In \textit{Proc. ICML} 3540--3549 (2017).
-
 \item Wang, Y. \textit{et al.} A highly efficient distributed database
   knobs tuning method based on multi-agent deep reinforcement learning.
   \textit{J. Supercomput.} (2025).
 
-\item van Hasselt, H., Guez, A. \& Silver, D. Deep reinforcement learning
-  with double Q-learning. In \textit{Proc. AAAI} 2094--2100 (2016).
+\item Pavlo, A. \textit{et al.} Self-Driving Database Management Systems.
+  In \textit{Proc. CIDR} (2017).
+
+\item Marcus, R. \textit{et al.} Neo: A Learned Query Optimizer.
+  \textit{Proc. VLDB Endow.} \textbf{12}, 1705--1718 (2019).
+
+\item Camacho-Rodr\'{\i}guez, J. \textit{et al.} LST-Bench: Benchmarking
+  Log-Structured Tables in the Cloud. In \textit{Proc. ACM SIGMOD}
+  1--14 (ACM, 2024).
+
+\item Armbrust, M. \textit{et al.} Lakehouse: A New Generation of Open
+  Platforms that Unify Data Warehousing and Advanced Analytics. In
+  \textit{Proc. CIDR} (2021).
+
+\item Dayan, N., Athanassoulis, M. \& Idreos, S. Dostoevsky: Better
+  space-time trade-offs for LSM-tree based key-value stores via adaptive
+  removal of superfluous merging. In \textit{Proc. ACM SIGMOD} 505--520
+  (ACM, 2018).
+
+\item Kumar, A., Zhou, A., Tucker, G. \& Levine, S. Conservative
+  Q-learning for offline reinforcement learning. In \textit{Adv. Neural
+  Inf. Process. Syst.} \textbf{33}, 1179--1191 (2020).
+
+\item Kostrikov, I., Nair, A. \& Levine, S. Offline reinforcement
+  learning with implicit Q-learning. In \textit{Proc. Int. Conf. Learn.
+  Represent.} (2022).
+
+\item Fujimoto, S., Meger, D. \& Precup, D. Off-policy deep
+  reinforcement learning without exploration. In \textit{Proc. Int.
+  Conf. Mach. Learn.} \textbf{97}, 2052--2062 (2019).
+
+\item Vezhnevets, A. S. \textit{et al.} FeUdal Networks for Hierarchical
+  Reinforcement Learning. In \textit{Proc. ICML} 3540--3549 (2017).
 
 \item Bacon, P.-L., Harb, J. \& Precup, D. The option-critic
   architecture. In \textit{Proc. AAAI} 1726--1734 (2017).
+
+\item Zhang, K., Yang, Z. \& Ba\c{s}ar, T. Multi-Agent Reinforcement
+  Learning: A Selective Overview of Theories and Algorithms.
+  \textit{J. Mach. Learn. Res.} \textbf{22}, 1--85 (2021).
 
 \item Peng, X. B., Kumar, A., Zhang, G. \& Levine, S.
   Advantage-weighted regression: simple and scalable off-policy
   reinforcement learning. \textit{arXiv} preprint arXiv:1910.00177
   (2019).
 
+\item Vaswani, A. \textit{et al.} Attention is all you need. In
+  \textit{Advances in Neural Information Processing Systems (NeurIPS)}
+  vol.~30 (2017).
+
+\item Wang, Z. \textit{et al.} Dueling network architectures for deep
+  reinforcement learning. In \textit{Proc. ICML} 1995--2003 (2016).
+
+\item van Hasselt, H., Guez, A. \& Silver, D. Deep reinforcement learning
+  with double Q-learning. In \textit{Proc. AAAI} 2094--2100 (2016).
+
+\item Schulman, J. \textit{et al.} Proximal policy optimization algorithms.
+  \textit{arXiv} preprint arXiv:1707.06347 (2017).
+
 \item Efron, B. \& Tibshirani, R. J. \textit{An Introduction to the
   Bootstrap} (Chapman \& Hall, 1993).
 
-\item Holm, S. A simple sequentially rejective multiple test procedure.
-  \textit{Scand. J. Stat.} \textbf{6}, 65--70 (1979).
+\item Field, C. A. \& Welsh, A. H. Bootstrapping clustered data.
+  \textit{J. R. Stat. Soc. B} \textbf{69}, 369--390 (2007).
 
 \item Cliff, N. Dominance statistics: Ordinal analyses to answer ordinal
   questions. \textit{Psychol. Bull.} \textbf{114}, 494--509 (1993).
+
+\item Holm, S. A simple sequentially rejective multiple test procedure.
+  \textit{Scand. J. Stat.} \textbf{6}, 65--70 (1979).
 
 \end{enumerate}
 

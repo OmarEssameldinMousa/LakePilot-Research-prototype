@@ -1,0 +1,29 @@
+{
+  "status": "done",
+  "policy": "PartitionOnlyRL_ddqn",
+  "policy_class": "PartitionOnlyPolicy",
+  "model_type": "ddqn",
+  "compact_weights": null,
+  "partition_weights": "/app/revision/phase1_stats/phase1_weights/weights/partition_ddqn_seed3.weights.h5",
+  "seed_slot": 3,
+  "protocol": "eval500",
+  "plan_file": "workload_plan_v5_eval.json",
+  "episodes": 1,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    15301
+  ],
+  "env_seed_override": null,
+  "action_selection": "greedy_argmax",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109660
+  },
+  "started_at": "2026-09-17T21:00:56.593867",
+  "finished_at": "2026-09-17T21:47:36.258844",
+  "total_wall_clock_sec": 2799.7
+}

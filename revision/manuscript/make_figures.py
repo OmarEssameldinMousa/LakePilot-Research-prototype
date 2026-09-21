@@ -242,39 +242,63 @@ def fig_cost():
 # Fig 5 — online adaptation, per episode, with across-seed spread
 # ────────────────────────────────────────────────────────────────────────────
 def fig_adaptive():
-    runs = {
-        'adaptive_ddqn': ('DDQN', CORAL),
-        'adaptive_attentive_ppoclip': ('AttentivePPO-clip', BLUE),
-        'adaptive_mlp_ppo': ('MLP-PPO', TEAL),
-    }
-    fig, ax = plt.subplots(figsize=(5.6, 3.0))
+    """Adaptation against its own controls.
 
-    for label_dir, (label, color) in runs.items():
-        root = REV / 'phase6_ddqn' / 'online_raw' / label_dir
-        curves = []
-        for sd in sorted(root.glob('seed*')):
-            f = sd / 'episode_log.csv'
-            if f.exists():
-                g = pd.read_csv(f).sort_values('episode')
-                curves.append(g['avg_global_reward'].values)
-        if not curves:
-            continue
-        n = min(len(c) for c in curves)
-        M = np.vstack([c[:n] for c in curves])
-        ep = np.arange(1, n + 1)
-        mean = M.mean(axis=0)
-        se = M.std(axis=0, ddof=1) / np.sqrt(M.shape[0])
-        ax.plot(ep, mean, marker='o', markersize=3.5, color=color,
-                linewidth=1.4, label=f'{label} (n={M.shape[0]})')
-        ax.fill_between(ep, mean - se, mean + se, color=color, alpha=0.15,
-                        linewidth=0)
+    The round-1 version plotted only the adapting runs, which left the reader to
+    compare them against a Table 1 number measured under a different
+    action-selection rule. Each adapting curve now carries the frozen control
+    (arm A) it should be read against, and MLP-PPO additionally carries arm B
+    (argmax, no updates), whose separation is the action-selection effect.
+    """
+    import json
 
-    ax.set_xlabel('Adaptation episode')
-    ax.set_ylabel('Mean global reward')
-    ax.set_xticks(range(1, 6))
-    ax.legend(frameon=False, loc='lower right')
-    ax.grid(axis='y')
-    ax.set_axisbelow(True)
+    def curves(root, label_dir, done_only=True):
+        out = []
+        for sd in sorted((root / label_dir).glob('seed*')):
+            f, man = sd / 'episode_log.csv', sd / 'manifest.json'
+            if not f.exists():
+                continue
+            if done_only and man.exists() and \
+                    json.loads(man.read_text()).get('status') != 'done':
+                continue
+            out.append(pd.read_csv(f).sort_values('episode')['avg_global_reward'].values)
+        return out
+
+    ADAPT = REV / 'phase6_ddqn' / 'online_raw'
+    FROZ = REV / 'phase10_r2' / 'frozen_raw'
+    runs = [
+        ('DDQN', CORAL, 'adaptive_ddqn', 'frozen_ddqn', None),
+        ('AttentivePPO-clip', BLUE, 'adaptive_attentive_ppoclip',
+         'frozen_attentive_ppoclip', None),
+        ('MLP-PPO', TEAL, 'adaptive_mlp_ppo', 'frozen_mlp_ppo',
+         'frozen_greedy_mlp_ppo'),
+    ]
+    fig, axes = plt.subplots(1, 3, figsize=(10.2, 3.1), sharey=True)
+
+    for ax, (label, color, adapt_dir, froz_dir, greedy_dir) in zip(axes, runs):
+        for cs, style, name in [(curves(ADAPT, adapt_dir), '-', 'adaptive'),
+                                (curves(FROZ, froz_dir), '--', 'frozen control'),
+                                (curves(FROZ, greedy_dir) if greedy_dir else [],
+                                 ':', 'frozen, argmax')]:
+            if not cs:
+                continue
+            n = min(len(c) for c in cs)
+            M = np.vstack([c[:n] for c in cs])
+            ep = np.arange(1, n + 1)
+            mean = M.mean(axis=0)
+            se = M.std(axis=0, ddof=1) / np.sqrt(M.shape[0])
+            ax.plot(ep, mean, style, marker='o', markersize=3.0, color=color,
+                    linewidth=1.4, label=f'{name} (n={M.shape[0]})')
+            if style != ':':
+                ax.fill_between(ep, mean - se, mean + se, color=color,
+                                alpha=0.15, linewidth=0)
+        ax.set_title(label, fontweight='bold', loc='left', fontsize=9)
+        ax.set_xlabel('Adaptation episode')
+        ax.set_xticks(range(1, 6))
+        ax.grid(axis='y')
+        ax.set_axisbelow(True)
+        ax.legend(frameon=False, loc='lower right', fontsize=7)
+    axes[0].set_ylabel('Mean global reward')
     save(fig, 'fig_adaptive')
 
 

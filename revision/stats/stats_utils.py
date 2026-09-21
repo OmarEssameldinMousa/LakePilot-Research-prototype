@@ -5,6 +5,7 @@ Implements the statistical machinery required by the Scientific Reports
 reviewers:
 
   • bootstrap_ci        — percentile bootstrap 95% CI (10,000 resamples)
+  • cluster_bootstrap_ci— seed-level cluster bootstrap (episodes nested)
   • paired_tests        — Wilcoxon signed-rank AND paired permutation test
   • cliffs_delta        — non-parametric effect size (with rank-biserial
                           equivalence for paired data)
@@ -56,6 +57,48 @@ def bootstrap_ci(
         boots[b] = statistic(x[rng.integers(0, n, n)])
     alpha = (1.0 - ci) / 2.0
     return float(statistic(x)), float(np.quantile(boots, alpha)), float(np.quantile(boots, 1 - alpha))
+
+
+def cluster_bootstrap_ci(
+    x: Sequence[float],
+    clusters: Sequence,
+    n_boot: int = DEFAULT_N_BOOT,
+    ci: float = 0.95,
+    statistic=np.mean,
+    seed: int = RNG_SEED,
+) -> Tuple[float, float, float]:
+    """Cluster (block) bootstrap CI: resample CLUSTERS with replacement, keeping
+    every observation nested inside a drawn cluster.
+
+    `bootstrap_ci` treats the episodes of one training run as independent draws.
+    They are not: episodes sharing a training seed share a policy, so the
+    quantity a reader cares about — the performance of a *newly trained* agent —
+    has its uncertainty driven by seed-level variation. Resampling seeds (with
+    their episodes nested) is the interval for that quantity, and it is wider.
+
+    Returns (point_estimate, ci_low, ci_high). With few clusters (here 5 training
+    seeds) the interval is coarse by construction; that coarseness is the honest
+    reflection of how many independent training runs were performed.
+    """
+    x = np.asarray(x, dtype=float)
+    clusters = np.asarray(clusters)
+    if len(x) != len(clusters):
+        raise ValueError('x and clusters must have the same length')
+    keys = np.unique(clusters)
+    if len(keys) < 2:
+        raise ValueError('cluster bootstrap needs at least two clusters')
+    members = [np.where(clusters == k)[0] for k in keys]
+    rng = np.random.default_rng(seed)
+    n_clusters = len(keys)
+    boots = np.empty(n_boot)
+    for b in range(n_boot):
+        drawn = rng.integers(0, n_clusters, n_clusters)
+        idx = np.concatenate([members[d] for d in drawn])
+        boots[b] = statistic(x[idx])
+    alpha = (1.0 - ci) / 2.0
+    return (float(statistic(x)),
+            float(np.quantile(boots, alpha)),
+            float(np.quantile(boots, 1 - alpha)))
 
 
 # ─────────────────────────────────────────────────────────────

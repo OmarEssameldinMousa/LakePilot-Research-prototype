@@ -204,6 +204,16 @@ def main():
                     choices=list(PROTOCOLS.keys()))
     ap.add_argument("--out", default="/app/revision/phase1_stats/raw")
     ap.add_argument("--label", default=None, help="Output folder name (default: policy name)")
+    # Round-2: the oracle experiment (phase 4) ran on env_seed 35101, while the
+    # rule-based comparator quoted beside it came from the std1000 seed block
+    # (11001-11005) — so the published comparison was across two different
+    # workload realisations rather than paired. This flag replays a policy on an
+    # explicit environment seed so that comparison can be made like-for-like.
+    ap.add_argument("--env-seed", type=int, default=None,
+                    help="Force this environment seed for every episode, overriding "
+                         "the (protocol, slot, episode) derivation. Use only to pair "
+                         "with a run that used a non-standard seed; the manifest "
+                         "records it.")
     ap.add_argument("--episodes", type=int, default=None,
                     help="Override the protocol's episode count (Phase 3 sweeps use fewer "
                          "episodes per configuration). Env seeds are unchanged, so runs "
@@ -251,7 +261,9 @@ def main():
                 "plan_file": plan_file,
                 "episodes": n_eps,
                 "steps_per_episode": steps,
-                "env_seeds": [env_seed_for(proto, slot, e) for e in range(1, n_eps + 1)],
+                "env_seeds": ([args.env_seed] * n_eps if args.env_seed is not None
+                              else [env_seed_for(proto, slot, e) for e in range(1, n_eps + 1)]),
+                "env_seed_override": args.env_seed,
                 "action_selection": "greedy_argmax" if "RL" in args.policy else "deterministic_rule",
                 "git_commit": git_commit(),
                 "hardware": hardware_info(),
@@ -266,7 +278,7 @@ def main():
             summaries = []
             t0 = time.time()
             for e in range(1, n_eps + 1):
-                es = env_seed_for(proto, slot, e)
+                es = args.env_seed if args.env_seed is not None else env_seed_for(proto, slot, e)
                 print(f"   ▶ episode {e}/{n_eps} (env_seed={es})", flush=True)
                 collector, summary = run_episode(sim, policy, steps, es, label)
                 summary["episode"] = e

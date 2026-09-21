@@ -1,167 +1,117 @@
-# Phase 1 — Multi-seed training and statistical validation: SUMMARY
+# Phase 1 — multi-seed statistical validation (SUMMARY)
 
-**Status: complete.** 84 evaluation runs, all validated clean
-(`revision/stats/validate_runs.py`). Every policy was evaluated on two protocols
-with environment seeds that are a function of (protocol, seed slot, episode)
-only — never of the policy — so all comparisons below are **paired**.
+Episodes are matched across policies by environment seed, so every
+comparison below is paired. CIs are percentile bootstrap (10,000 resamples);
+p-values are paired permutation tests, Holm–Bonferroni corrected within each
+(protocol, metric) family. Effect sizes are Cliff's delta.
 
-- Protocol `std1000`: 1 × 1,000-step episode per seed, v5 standard workload
-- Protocol `eval500`: 5 × 500-step episodes per seed, compressed eval workload
-- Confidence intervals: percentile bootstrap, 10,000 resamples, over episodes
-- p-values: paired permutation tests, Holm–Bonferroni corrected within each
-  (protocol, metric) family; Wilcoxon signed-rank reported alongside
-- Effect sizes: Cliff's delta
+## std1000
 
----
-
-## Headline results (eval500, 25 matched episodes per policy)
-
-| Policy | Reward (95% CI) | Seed sd | Latency (ms) | Files | Pruning |
+| policy | reward (95% CI) | latency ms | files | pruning | seeds |
 |---|---|---|---|---|---|
-| **DDQN (hierarchical RL)** | **0.2105 [0.2050, 0.2155]** | 0.0104 | 220 | 37.4 | 0.204 |
-| WorkloadAwareThreshold | 0.1943 [0.1923, 0.1964] | 0.0020 | 324 | 49.9 | 0.248 |
-| AlwaysCompact_C128 | 0.1903 [0.1901, 0.1904] | 0.0002 | 198 | 22.1 | 0.000 |
-| AttentivePPO-clip (hierarchical RL) | 0.1823 [0.1669, 0.1963] | 0.0403 | 331 | 51.6 | 0.225 |
-| Threshold10_C128 | 0.1710 [0.1708, 0.1712] | 0.0003 | 203 | 26.1 | 0.000 |
-| MLP-PPO (hierarchical RL) | 0.1675 [0.1579, 0.1772] | 0.0254 | 317 | 61.6 | 0.221 |
-| Threshold10_C64 | 0.1273 [0.1267, 0.1280] | 0.0011 | 321 | 46.8 | 0.000 |
-| CompactOnly (ablation) | 0.1202 [0.1086, 0.1315] | 0.0428 | 314 | 48.4 | 0.000 |
-| PartitionOnly (ablation) | −0.1099 [−0.1195, −0.1011] | 0.0116 | 3643 | 793 | 0.080 |
+| MultiAgentRL_ddqn | 0.2306 [0.2110, 0.2463] | 344 | 64.7 | 0.235 | 5 |
+| WorkloadAwareThreshold | 0.2139 [0.2079, 0.2219] | 573 | 91.5 | 0.298 | 5 |
+| MultiAgentRL_attentive_ppoclip | 0.1923 [0.1564, 0.2232] | 498 | 89.7 | 0.241 | 5 |
+| AlwaysCompact_C128 | 0.1870 [0.1866, 0.1873] | 348 | 43.5 | 0.000 | 5 |
+| Threshold10_C128 | 0.1759 [0.1756, 0.1762] | 331 | 46.3 | 0.000 | 5 |
+| MultiAgentRL_mlp_ppo | 0.1731 [0.1508, 0.1971] | 637 | 127.7 | 0.251 | 5 |
+| Threshold10_C64 | 0.1284 [0.1276, 0.1291] | 571 | 88.4 | 0.000 | 5 |
+| CompactOnlyRL_attentive_ppoclip | 0.1190 [0.0836, 0.1505] | 548 | 94.0 | 0.000 | 5 |
+| MultiAgentRL_attentive_ppo | -0.0940 [-0.0940, -0.0940] | 4686 | 1004.7 | 0.258 | 1 |
 
-The 1,000-step ranking agrees (Spearman ρ = 0.964, p < 0.001); see
-`MANUSCRIPT_TABLES.md` for both protocols with published values alongside.
+## eval500
 
----
-
-## (a) Is RL significantly better than the best heuristic?
-
-**Not as a class — it depends entirely on the architecture.** The honest claim is
-*"the best RL configuration significantly outperforms the best heuristic"*, not
-*"RL outperforms heuristics"*.
-
-Against `WorkloadAwareThreshold` (best heuristic, 0.1943), eval500:
-
-| Agent | Δ reward | Holm p | Cliff's δ | Verdict |
-|---|---|---|---|---|
-| DDQN | **+0.0162** | **0.00105** | +0.71 (large) | **significantly better** |
-| AttentivePPO-clip | −0.0120 | 0.4656 | +0.10 (negligible) | indistinguishable |
-| MLP-PPO | −0.0268 | 0.0018 | −0.71 (large) | significantly **worse** |
-
-DDQN beats **every** policy in the study, all Holm-corrected p ≤ 0.0018:
-AlwaysCompact_C128 (+0.0202), AttentivePPO-clip (+0.0282), Threshold10_C128
-(+0.0395), Threshold10_C64 (+0.0832), WorkloadAwareThreshold (+0.0162).
-
-**All five DDQN seeds** individually beat the best heuristic (0.198–0.224), so
-the result is not carried by one lucky run.
-
-**Mechanism.** DDQN wins with *less* pruning than the best heuristic
-(0.204 vs 0.248) but markedly better compaction: 37.4 files vs 49.9 and 220 ms
-vs 324 ms. Its advantage comes from state-dependent compaction-target selection
-(C64/C128/C32 mixed by ingestion rate), not from partitioning more aggressively.
-
-## (b) Are the three architectures distinguishable?
-
-**Partly.** eval500, RL-vs-RL, Holm-corrected:
-
-| Comparison | Δ | p | δ | Verdict |
-|---|---|---|---|---|
-| DDQN vs AttentivePPO-clip | +0.0282 | 0.0018 | +0.44 (medium) | significant |
-| DDQN vs MLP-PPO | +0.0430 | 0.00105 | +0.84 (large) | significant |
-| AttentivePPO-clip vs MLP-PPO | +0.0148 | 0.3107 | +0.33 (medium) | **not significant** |
-
-**The published "+3.5% attention advantage over MLP-PPO" does not survive
-multi-seed testing.** Attention and MLP-PPO are statistically indistinguishable
-on reward; DDQN is significantly ahead of both.
-
-**Stability separates the architectures as sharply as mean performance.**
-Across-seed sd of mean reward: DDQN 0.0104, MLP-PPO 0.0254, AttentivePPO-clip
-0.0403. Attention is ~4× more variable than DDQN: three of its five seeds beat
-the best heuristic (0.199–0.220) while two fail badly (0.124, 0.158),
-accumulating 2.5× more files. A single-checkpoint evaluation — the published
-protocol — could therefore have reported anything from "clearly best" to
-"clearly worse" purely by seed luck.
-
-## Ablation: both specialists are required, and the interaction is non-additive
-
-eval500, all Holm-corrected p = 0.0022, all |δ| ≥ 0.97:
-
-| Configuration | Reward | Δ vs full | Latency | Files | Pruning |
+| policy | reward (95% CI) | latency ms | files | pruning | seeds |
 |---|---|---|---|---|---|
-| Full hierarchical agent | 0.1823 | — | 331 ms | 51.6 | 0.225 |
-| CompactOnly (partition specialist removed) | 0.1202 | −0.0621 | 314 ms | 48.4 | 0.000 |
-| PartitionOnly (compaction specialist removed) | −0.1099 | −0.2922 | 3643 ms | 793 | 0.080 |
+| MultiAgentRL_ddqn | 0.2105 [0.2050, 0.2155] | 220 | 37.4 | 0.204 | 5 |
+| WorkloadAwareThreshold | 0.1943 [0.1923, 0.1964] | 324 | 49.9 | 0.248 | 5 |
+| AlwaysCompact_C128 | 0.1903 [0.1901, 0.1904] | 198 | 22.1 | 0.000 | 5 |
+| MultiAgentRL_attentive_ppoclip | 0.1823 [0.1669, 0.1963] | 331 | 51.6 | 0.225 | 5 |
+| Threshold10_C128 | 0.1710 [0.1708, 0.1712] | 203 | 26.1 | 0.000 | 5 |
+| MultiAgentRL_mlp_ppo | 0.1675 [0.1579, 0.1772] | 317 | 61.6 | 0.221 | 5 |
+| Threshold10_C64 | 0.1273 [0.1267, 0.1280] | 321 | 46.8 | 0.000 | 5 |
+| CompactOnlyRL_attentive_ppoclip | 0.1202 [0.1086, 0.1315] | 314 | 48.4 | 0.000 | 5 |
+| PartitionOnlyRL_attentive_ppoclip | -0.1099 [-0.1195, -0.1011] | 3642 | 793.0 | 0.080 | 3 |
 
-Two points worth making in the manuscript:
+## Answers to the reviewer questions
 
-1. **Removing partitioning isolates cleanly.** Full and CompactOnly are
-   physically almost identical (51.6 vs 48.4 files; 331 vs 314 ms). The entire
-   0.062 difference is pruning: 0.225 vs exactly 0.000.
-2. **The interaction is non-additive.** PartitionOnly's pruning collapses to
-   0.080 despite being the partition-only agent — without compaction, data is
-   never rewritten into the new layout, so partitioning cannot deliver its
-   benefit. Neither specialist's contribution is independent of the other.
+_Reference protocol: eval500._
 
----
+**(a) Is RL significantly better than the best heuristic on reward?**
 
-## Methodological corrections carried by this phase
+Best heuristic: `WorkloadAwareThreshold` = 0.1943 [0.1923, 0.1964]  
+Best RL: `MultiAgentRL_ddqn` = 0.2105 [0.2050, 0.2155]
 
-1. **Statistics.** The published Table 2 reported step-level mean ± s.d. pooled
-   over 5,000 steps. That s.d. measures step-to-step variation within episodes
-   and treats autocorrelated steps as independent; it is not an uncertainty
-   estimate for the mean. All intervals here are computed over independent
-   episodes, with across-seed sd reported separately.
-2. **Training-pipeline defects** (full audit in `PIPELINE_HISTORY.md`): a
-   trajectory-identity leak through the staleness features, a train/serve
-   normalization skew that made the published frozen agents behave as a constant
-   COMPACT_128KB policy via out-of-distribution saturation, majority-class
-   collapse of the AWR objective, a Double-DQN update that regressed softmax
-   outputs instead of Q-values, and an ε schedule that never decayed.
-3. **Evaluation protocol.** Frozen evaluation is now deterministic (argmax).
-   Previously it sampled stochastically, and frozen DDQN acted with ε = 1.0 —
-   i.e. uniformly at random within the delegated specialist.
-4. **Environment-health guard.** A Spark driver crash does not raise inside the
-   simulator; it silently yields latency −1 and file_count 0, which the reward
-   maps to exactly 0.0. Runs now abort instead of writing `status: done` over
-   meaningless data, and `validate_runs.py` audits every batch.
+Paired test `MultiAgentRL_ddqn` vs `WorkloadAwareThreshold`: difference +0.0162, Holm-corrected permutation p = 0.0018, Wilcoxon p = 0.0002865, Cliff's delta = +0.71 (large) → **SIGNIFICANT**.
 
-## Environment reproducibility
+**(b) Are the RL architectures distinguishable from each other?**
 
-The heuristics reproduce the published figures within 0.003 on the 1,000-step
-workload (AlwaysCompact_C128 0.1869 → 0.1870; Threshold10_C128 0.1734 → 0.1759;
-WorkloadAwareThreshold 0.2111 → 0.2139). The environment is therefore stable,
-and the changes in the RL numbers are attributable to the training-pipeline
-corrections rather than environment drift.
+- **Global reward**: 9/10 RL-vs-RL pairs significant after correction.
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_attentive_ppoclip: -0.0621, p=0.0018, delta=-0.76 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_ddqn: -0.0903, p=0.0018, delta=-1.00 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: -0.0473, p=0.0018, delta=-0.75 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: +0.2294, p=0.0018, delta=+1.00 (large)
+  - ✓ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_ddqn: -0.0282, p=0.002, delta=-0.44 (medium)
+  - ✗ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: +0.0148, p=0.3729, delta=+0.33 (medium)
+  - ✓ MultiAgentRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: +0.2990, p=0.0018, delta=+1.00 (large)
+  - ✓ MultiAgentRL_ddqn vs MultiAgentRL_mlp_ppo: +0.0430, p=0.0018, delta=+0.84 (large)
+  - ✓ MultiAgentRL_ddqn vs PartitionOnlyRL_attentive_ppoclip: +0.3199, p=0.0018, delta=+1.00 (large)
+  - ✓ MultiAgentRL_mlp_ppo vs PartitionOnlyRL_attentive_ppoclip: +0.2739, p=0.0018, delta=+1.00 (large)
+- **Latency (ms)**: 7/10 RL-vs-RL pairs significant after correction.
+  - ✗ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_attentive_ppoclip: -16.8226, p=1, delta=-0.09 (negligible)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_ddqn: +94.6285, p=0.00195, delta=+0.58 (large)
+  - ✗ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: -2.6985, p=1, delta=-0.05 (negligible)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: -3345.2457, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_ddqn: +111.4512, p=0.0018, delta=+0.66 (large)
+  - ✗ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: +14.1242, p=1, delta=-0.06 (negligible)
+  - ✓ MultiAgentRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: -3297.6831, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_ddqn vs MultiAgentRL_mlp_ppo: -97.3270, p=0.0018, delta=-0.93 (large)
+  - ✓ MultiAgentRL_ddqn vs PartitionOnlyRL_attentive_ppoclip: -3427.9931, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_mlp_ppo vs PartitionOnlyRL_attentive_ppoclip: -3325.1685, p=0.0018, delta=-1.00 (large)
+- **File count**: 8/10 RL-vs-RL pairs significant after correction.
+  - ✗ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_attentive_ppoclip: -3.1409, p=0.1297, delta=-0.21 (small)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_ddqn: +11.0551, p=0.01995, delta=+0.20 (small)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: -13.1354, p=0.002, delta=-0.42 (medium)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: -744.5765, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_ddqn: +14.1960, p=0.0048, delta=+0.23 (small)
+  - ✗ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: -9.9945, p=0.0792, delta=-0.31 (small)
+  - ✓ MultiAgentRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: -740.6548, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_ddqn vs MultiAgentRL_mlp_ppo: -24.1905, p=0.0018, delta=-0.89 (large)
+  - ✓ MultiAgentRL_ddqn vs PartitionOnlyRL_attentive_ppoclip: -755.1689, p=0.0018, delta=-1.00 (large)
+  - ✓ MultiAgentRL_mlp_ppo vs PartitionOnlyRL_attentive_ppoclip: -730.7340, p=0.0018, delta=-1.00 (large)
+- **Pruning ratio**: 7/10 RL-vs-RL pairs significant after correction.
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_attentive_ppoclip: -0.2245, p=0.0018, delta=-1.00 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_ddqn: -0.2044, p=0.0018, delta=-1.00 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: -0.2208, p=0.0018, delta=-1.00 (large)
+  - ✓ CompactOnlyRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: -0.0802, p=0.0018, delta=-1.00 (large)
+  - ✗ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_ddqn: +0.0201, p=0.4896, delta=+0.37 (medium)
+  - ✗ MultiAgentRL_attentive_ppoclip vs MultiAgentRL_mlp_ppo: +0.0037, p=1, delta=+0.16 (small)
+  - ✓ MultiAgentRL_attentive_ppoclip vs PartitionOnlyRL_attentive_ppoclip: +0.1753, p=0.0018, delta=+1.00 (large)
+  - ✗ MultiAgentRL_ddqn vs MultiAgentRL_mlp_ppo: -0.0164, p=0.3385, delta=-0.16 (small)
+  - ✓ MultiAgentRL_ddqn vs PartitionOnlyRL_attentive_ppoclip: +0.1226, p=0.0018, delta=+1.00 (large)
+  - ✓ MultiAgentRL_mlp_ppo vs PartitionOnlyRL_attentive_ppoclip: +0.1414, p=0.0018, delta=+1.00 (large)
 
-## Consequences for the manuscript
+## Seed-level stability
 
-Claims that no longer hold as written:
+Per-seed spread of mean global reward (large spread = unstable training):
 
-- *"All three hierarchical RL agents outperform 17 heuristic and workload-aware
-  baselines"* — MLP-PPO now ranks below three heuristics; only DDQN beats the
-  best heuristic.
-- *"AttentivePPO achieves the highest mean global reward (0.2201)"* — DDQN is
-  now highest (0.2306 on std1000, 0.2105 on eval500); AttentivePPO-clip is third.
-- *"+3.5% improvement over MLP-PPO"* — not statistically significant.
-- *"+4.3% improvement over the best heuristic"* — becomes +7.8% (std1000) /
-  +8.3% (eval500), for DDQN rather than AttentivePPO.
-
-Claims that survive or strengthen:
-
-- Hierarchical RL beats the best heuristic — now with a significance test,
-  a large effect size, and consistency across all five seeds.
-- Joint compaction + partitioning beats either specialist alone, with the
-  non-additive interaction now measured rather than asserted.
-- DDQN's reward *improved* over its published value (0.2196 → 0.2306) once the
-  pipeline was corrected.
-
-## Artefacts
-
-| File | Contents |
-|---|---|
-| `results_table.csv` | mean ± bootstrap 95% CI, per policy × protocol × metric |
-| `significance_matrix.csv` | every pairwise paired test, Holm-corrected |
-| `MANUSCRIPT_TABLES.md` | rewritten Tables 1 and 2 with published values alongside |
-| `table{1,2}_rewritten_*.csv` | machine-readable versions |
-| `figures/forest_reward_*.{pdf,png}` | forest plots, 300 dpi |
-| `PIPELINE_HISTORY.md` | training-pipeline audit trail and scope decisions |
-| `raw/<policy>/seed<k>/<protocol>/` | per-step transitions, episode summaries, manifests |
+| policy | protocol | min | max | sd |
+|---|---|---|---|---|
+| CompactOnlyRL_attentive_ppoclip | std1000 | 0.0573 | 0.1677 | 0.0428 |
+| MultiAgentRL_attentive_ppoclip | std1000 | 0.1347 | 0.2378 | 0.0421 |
+| MultiAgentRL_attentive_ppoclip | eval500 | 0.1242 | 0.2200 | 0.0403 |
+| CompactOnlyRL_attentive_ppoclip | eval500 | 0.0836 | 0.1591 | 0.0323 |
+| MultiAgentRL_mlp_ppo | std1000 | 0.1357 | 0.2172 | 0.0294 |
+| MultiAgentRL_mlp_ppo | eval500 | 0.1430 | 0.2023 | 0.0254 |
+| MultiAgentRL_ddqn | std1000 | 0.1920 | 0.2551 | 0.0238 |
+| PartitionOnlyRL_attentive_ppoclip | eval500 | -0.1232 | -0.1020 | 0.0116 |
+| MultiAgentRL_ddqn | eval500 | 0.1981 | 0.2244 | 0.0104 |
+| WorkloadAwareThreshold | std1000 | 0.2050 | 0.2286 | 0.0090 |
+| WorkloadAwareThreshold | eval500 | 0.1915 | 0.1964 | 0.0020 |
+| Threshold10_C64 | eval500 | 0.1261 | 0.1288 | 0.0011 |
+| Threshold10_C64 | std1000 | 0.1271 | 0.1296 | 0.0010 |
+| AlwaysCompact_C128 | std1000 | 0.1862 | 0.1875 | 0.0005 |
+| Threshold10_C128 | std1000 | 0.1752 | 0.1763 | 0.0004 |
+| Threshold10_C128 | eval500 | 0.1707 | 0.1713 | 0.0003 |
+| AlwaysCompact_C128 | eval500 | 0.1900 | 0.1905 | 0.0002 |
+| MultiAgentRL_attentive_ppo | std1000 | -0.0940 | -0.0940 | 0.0000 |

@@ -35,7 +35,15 @@ RAW_ROOTS = [
     ROOT / 'revision' / 'phase4_oracle',
     ROOT / 'revision' / 'phase5_generalization',
     ROOT / 'revision' / 'phase7_attention',
+    # Round 2. The frozen-control arms write episode_log.csv (the online-runner
+    # format) rather than episode_summary.csv, and are exposed to exactly the
+    # same silent-crash mode, so both filenames are collected below.
+    ROOT / 'revision' / 'phase6_ddqn' / 'online_raw',
+    ROOT / 'revision' / 'phase10_r2',
 ]
+
+# Both per-episode summary formats produced in this project.
+SUMMARY_FILENAMES = ('episode_summary.csv', 'episode_log.csv')
 
 # An episode whose mean latency exceeds this is not a slow query, it is a crash.
 ABSURD_LATENCY_MS = 60_000
@@ -76,7 +84,8 @@ def main():
     files = []
     for root in RAW_ROOTS:
         # depth varies: phase1 raw/<policy>/seed/<proto>/, phase3 <sweep>/<cfg>/seed/<proto>/
-        files += glob.glob(str(root / '**' / 'episode_summary.csv'), recursive=True)
+        for name in SUMMARY_FILENAMES:
+            files += glob.glob(str(root / '**' / name), recursive=True)
     for f in sorted(set(files)):
         p = Path(f)
         problems, n = check(p)

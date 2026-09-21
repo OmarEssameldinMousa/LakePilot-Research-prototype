@@ -1,0 +1,7 @@
+policy,mean_files,measured_latency_ms,floor_select1_ms,floor_single_row_ms,floor_share_of_measured_pct,file_count_within_sweep_range
+DDQN,37.4,219.6,55.2,93.3,42.5,True
+WorkloadAwareThreshold,49.9,323.6,55.2,93.3,28.8,True
+AlwaysCompact_C128,22.1,197.9,55.2,93.3,47.1,True
+AttentivePPO-clip,51.6,331.1,55.2,93.3,28.2,True
+MLP-PPO,61.6,316.9,55.2,93.3,29.4,True
+PartitionOnly (ablation),793.0,3642.4,55.2,93.3,2.6,False

@@ -28,7 +28,8 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from stats_utils import bootstrap_ci, paired_tests, correct_family, results_to_records  # noqa: E402
+from stats_utils import (bootstrap_ci, cluster_bootstrap_ci, paired_tests,  # noqa: E402
+                         correct_family, results_to_records)
 
 ROOT = Path(__file__).resolve().parents[2]
 RAW = ROOT / 'revision' / 'phase1_stats' / 'raw'
@@ -73,6 +74,13 @@ def build_results_table(df: pd.DataFrame) -> pd.DataFrame:
             rec[f'{col}_mean'] = round(m, 6)
             rec[f'{col}_ci_low'] = round(lo, 6)
             rec[f'{col}_ci_high'] = round(hi, 6)
+            # Seed-level cluster bootstrap: the interval for the performance of a
+            # newly trained agent, as opposed to a newly drawn episode. Only
+            # identified where a policy has more than one episode per seed.
+            if g['seed'].nunique() >= 2 and len(g) > g['seed'].nunique():
+                _, clo, chi = cluster_bootstrap_ci(g[col].values, g['seed'].values)
+                rec[f'{col}_cluster_ci_low'] = round(clo, 6)
+                rec[f'{col}_cluster_ci_high'] = round(chi, 6)
         # seed-level spread (training-run variability, not just episode noise)
         if 'avg_global_reward' in g:
             per_seed = g.groupby('seed')['avg_global_reward'].mean()
@@ -84,7 +92,13 @@ def build_results_table(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def paired_frames(df: pd.DataFrame, protocol: str, metric: str):
-    """Return {policy: values ordered by env_seed}, restricted to shared env_seeds."""
+    """Return {policy: Series indexed by env_seed} for one protocol/metric.
+
+    Pairing is resolved *per comparison* by `significance()`, not globally: a
+    single global intersection would truncate every comparison to the coverage
+    of the least-covered policy (PartitionOnly ran 3 seeds, so every pair would
+    silently drop to n=15 even where 25 matched episodes exist).
+    """
     sub = df[df.protocol == protocol]
     per_policy = {}
     for policy, g in sub.groupby('policy'):
@@ -92,13 +106,7 @@ def paired_frames(df: pd.DataFrame, protocol: str, metric: str):
         if g['env_seed'].duplicated().any():
             g = g.groupby('env_seed', as_index=False)[metric].mean()
         per_policy[policy] = g.set_index('env_seed')[metric]
-    if not per_policy:
-        return {}
-    shared = set.intersection(*(set(s.index) for s in per_policy.values()))
-    if len(shared) < 3:
-        return {}
-    shared = sorted(shared)
-    return {p: s.loc[shared].values for p, s in per_policy.items()}
+    return per_policy
 
 
 def significance(df: pd.DataFrame) -> pd.DataFrame:
@@ -113,7 +121,13 @@ def significance(df: pd.DataFrame) -> pd.DataFrame:
             for i in range(len(names)):
                 for j in range(i + 1, len(names)):
                     a, b = names[i], names[j]
-                    fam.append(paired_tests(groups[a], groups[b], a, b))
+                    shared = sorted(set(groups[a].index) & set(groups[b].index))
+                    if len(shared) < 3:
+                        continue
+                    fam.append(paired_tests(groups[a].loc[shared].values,
+                                            groups[b].loc[shared].values, a, b))
+            if not fam:
+                continue
             fam = correct_family(fam)   # one Holm family per (protocol, metric)
             for r in results_to_records(fam):
                 r.update({'protocol': protocol, 'metric': col,

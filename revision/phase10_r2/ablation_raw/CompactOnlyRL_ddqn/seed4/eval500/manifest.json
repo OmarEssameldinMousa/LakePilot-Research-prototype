@@ -1,0 +1,33 @@
+{
+  "status": "done",
+  "policy": "CompactOnlyRL_ddqn",
+  "policy_class": "CompactOnlyPolicy",
+  "model_type": "ddqn",
+  "compact_weights": "/app/revision/phase1_stats/phase1_weights/weights/compaction_ddqn_seed4.weights.h5",
+  "partition_weights": null,
+  "seed_slot": 4,
+  "protocol": "eval500",
+  "plan_file": "workload_plan_v5_eval.json",
+  "episodes": 5,
+  "steps_per_episode": 500,
+  "env_seeds": [
+    15401,
+    15402,
+    15403,
+    15404,
+    15405
+  ],
+  "env_seed_override": null,
+  "action_selection": "greedy_argmax",
+  "git_commit": "unknown",
+  "hardware": {
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.35",
+    "machine": "x86_64",
+    "python": "3.10.12",
+    "cpu_count": 8,
+    "mem_total_kb": 16109660
+  },
+  "started_at": "2026-09-17T18:43:39.299405",
+  "finished_at": "2026-09-17T19:13:31.400171",
+  "total_wall_clock_sec": 1792.1
+}

@@ -1,0 +1,32 @@
+{
+  "script": "revision_bench_query_latency.py",
+  "purpose": "fixed query overhead vs per-file scan cost (round-2 reviewer point 8)",
+  "rows_target": 20000,
+  "batch": 200,
+  "reps_per_query": 30,
+  "file_counts": [
+    14,
+    21,
+    28,
+    56,
+    112,
+    224,
+    448
+  ],
+  "max_file_bytes": 131072,
+  "base_table": {
+    "files": 400,
+    "bytes": 2936518,
+    "rows": 20000
+  },
+  "staged_rows": 20000,
+  "staged_bytes": 1772073,
+  "select1_median_ms": 55.22274971008301,
+  "select1_mean_ms": 88.09159596761067,
+  "git_commit": "unknown",
+  "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.35",
+  "python": "3.10.12",
+  "started_at": "2026-09-16T21:17:50.858718",
+  "finished_at": "2026-09-16T21:33:06.595177",
+  "total_wall_clock_sec": 907.5
+}

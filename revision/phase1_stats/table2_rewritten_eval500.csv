@@ -1,4 +1,4 @@
-agent,n_seeds,n_episodes,reward,reward_ci,reward_seed_sd,latency_ms,latency_ms_ci,latency_ms_seed_sd,files,files_ci,files_seed_sd,pruning,pruning_ci,pruning_seed_sd
-DDQN (hierarchical RL),5,25,0.2105,"[0.2050, 0.2155]",0.0104,219.6,"[212.2, 227.1]",13.9,37.4,"[36.6, 38.1]",1.6,0.2044,"[0.1886, 0.2188]",0.0288
-AttentivePPO-clip (hierarchical RL),5,25,0.1823,"[0.1669, 0.1963]",0.0403,331.1,"[287.7, 379.6]",116.6,51.6,"[44.8, 58.9]",19.0,0.2245,"[0.2014, 0.2453]",0.0584
-MLP-PPO (hierarchical RL),5,25,0.1675,"[0.1579, 0.1772]",0.0254,316.9,"[297.1, 338.0]",46.5,61.6,"[56.6, 66.8]",12.4,0.2208,"[0.2031, 0.2389]",0.0366
+agent,n_seeds,n_episodes,reward,reward_ci,reward_seed_sd,reward_cluster_ci,latency_ms,latency_ms_ci,latency_ms_seed_sd,latency_ms_cluster_ci,files,files_ci,files_seed_sd,files_cluster_ci,pruning,pruning_ci,pruning_seed_sd,pruning_cluster_ci
+DDQN (hierarchical RL),5,25,0.2105,"[0.2050, 0.2155]",0.0104,"[0.2026, 0.2185]",219.6,"[212.2, 227.1]",13.9,"[209.6, 229.9]",37.4,"[36.6, 38.1]",1.6,"[36.1, 38.7]",0.2044,"[0.1886, 0.2188]",0.0288,"[0.1835, 0.2271]"
+AttentivePPO-clip (hierarchical RL),5,25,0.1823,"[0.1669, 0.1963]",0.0403,"[0.1481, 0.2121]",331.1,"[287.7, 379.6]",116.6,"[244.5, 428.2]",51.6,"[44.8, 58.9]",19.0,"[36.5, 66.6]",0.2245,"[0.2014, 0.2453]",0.0584,"[0.1722, 0.2601]"
+MLP-PPO (hierarchical RL),5,25,0.1675,"[0.1579, 0.1772]",0.0254,"[0.1481, 0.1870]",316.9,"[297.1, 338.0]",46.5,"[282.1, 354.4]",61.6,"[56.6, 66.8]",12.4,"[52.1, 71.3]",0.2208,"[0.2031, 0.2389]",0.0366,"[0.1939, 0.2511]"

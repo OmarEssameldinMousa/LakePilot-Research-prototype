@@ -223,3 +223,4 @@ __marimo__/
 revision/**/*.log
 # Weight archives: redundant with the unpacked phase1_weights*/ directories.
 revision/phase1_stats/phase1_weights*.zip
+revision/manuscript/

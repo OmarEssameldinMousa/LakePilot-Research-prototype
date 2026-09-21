@@ -1,0 +1,10 @@
+pool,action_id,action,count,share_pct,n_source_policies,file_count_p5,file_count_p95,state_deciles_covered,state_deciles_total
+compaction,0,NOOP,11313,66.55,12,8.0,843.0,10,10
+compaction,1,COMPACT_32KB,1986,11.68,6,10.0,321.0,10,10
+compaction,2,COMPACT_64KB,2145,12.62,8,6.0,159.0,10,10
+compaction,3,COMPACT_128KB,1556,9.15,6,3.0,89.0,9,10
+partition,0,NOOP,3570,71.54,3,8.0,160.0,10,10
+partition,4,PARTITION_HOUR,371,7.43,3,9.5,136.0,10,10
+partition,5,PARTITION_REGION,350,7.01,3,10.0,133.0,9,10
+partition,6,PARTITION_EVENT_TYPE,363,7.27,3,10.0,135.0,10,10
+partition,7,REMOVE_PARTITION,336,6.73,2,8.0,135.0,10,10

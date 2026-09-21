@@ -1,0 +1,5 @@
+architecture,contrast,n,diff,perm_p,cliffs_delta,isolates
+DDQN,adaptive - frozen arm A,25,0.0012,0.6631,0.078,learning
+MLP-PPO,adaptive - frozen arm A,25,0.0058,0.0192,0.238,learning
+MLP-PPO,frozen arm A - frozen arm B,25,0.0355,0.0,0.722,action selection
+AttentivePPO-clip,adaptive - frozen arm A,25,-0.0053,0.3352,-0.299,learning

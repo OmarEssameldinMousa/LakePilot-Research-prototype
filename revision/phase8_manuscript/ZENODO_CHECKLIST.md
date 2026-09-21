@@ -73,3 +73,55 @@ good for reproducibility, but for the archive you may prefer either:
 For a paper whose central methodological claim is that single-checkpoint
 evaluation is unreliable, archiving the full multi-seed data as-is is the more
 persuasive option.
+
+---
+
+## Round-2 release (second revision)
+
+The round-1 deposit (DOI 10.5281/zenodo.21860273) is cited in the manuscript and
+stays valid. The second revision adds code, runs and analyses, so it needs a new
+**version** of the same Zenodo record — which keeps the concept DOI stable and
+mints a new version DOI.
+
+### New in this release
+
+Code (`LakeGymLite/src/`):
+
+- [x] `revision_bench_query_latency.py` — query-latency decomposition: holds data
+      constant, varies file count, measures the fixed overhead floor
+- [x] `revision_online_eval.py` — new `--frozen` and `--greedy` arms, so the
+      adaptation comparison has a control run under its own protocol
+- [x] `revision_phase1_eval.py` — new `--env-seed`, so a policy can be replayed on
+      the oracle's environment seed and the comparison becomes paired
+
+Analysis (`revision/stats/`):
+
+- [x] `cluster_bootstrap_ci` in `stats_utils.py` — seed-level interval
+- [x] `analyze_action_coverage.py` — action coverage of the two offline pools
+- [x] `analyze_phase9_latency.py` — latency floor and file-count dependence
+- [x] `analyze_phase10_frozen.py` — frozen control vs adaptation
+- [x] `audit_manuscript_numbers.py` — checks manuscript tables against source CSVs
+- [x] `analyze_phase1.py` — **bug fix**: episode pairing is now resolved per
+      comparison rather than as a global intersection across all policies
+
+Manuscript tooling (`revision/manuscript/`):
+
+- [x] `renumber_refs.py` — reference renumbering, and a `--check` validator
+
+Data:
+
+- [x] `revision/phase9_latency/` — latency sweep, fit, manifest
+- [x] `revision/phase10_r2/` — frozen control, DDQN ablation, paired oracle runs
+- [x] `revision/run_r2_batch.sh` — the batch that produced them, resumable
+
+### Steps
+
+- [ ] **[you]** Run `python3 revision/stats/validate_runs.py` over the new runs
+      and confirm 0 corrupted before archiving
+- [ ] **[you]** Tag the release (`v1.1-revision2`) and push
+- [ ] **[you]** Create the new version on the existing Zenodo record
+- [ ] **[you]** Update the version DOI in *Code availability* and *Data
+      availability* if the journal prefers the version DOI to the concept DOI
+- [ ] **[you]** Confirm the repository URL renders in full in the typeset PDF
+      (the round-1 truncation was a line-breaking artefact; `xurl` is now loaded,
+      but it is worth checking the proof)

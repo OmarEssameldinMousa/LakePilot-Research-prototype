@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from stats_utils import bootstrap_ci  # noqa: E402
+from stats_utils import bootstrap_ci, cluster_bootstrap_ci  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'revision' / 'phase1_stats'
@@ -72,10 +72,19 @@ def table1(df: pd.DataFrame, protocol: str) -> pd.DataFrame:
         n_seeds = g['seed'].nunique()
         r, lo, hi = bootstrap_ci(g['avg_global_reward'].values)
         per_seed = g.groupby('seed')['avg_global_reward'].mean()
+        # Seed-level cluster interval (see stats_utils.cluster_bootstrap_ci):
+        # the uncertainty about a newly *trained* agent rather than a newly
+        # drawn episode. Reported alongside, never instead.
+        if n_seeds >= 2 and len(g) > n_seeds:
+            _, clo, chi = cluster_bootstrap_ci(g['avg_global_reward'].values, g['seed'].values)
+        else:
+            clo = chi = np.nan
         out.append({
             'policy': DISPLAY.get(policy, policy),
             'reward': round(r, 4),
             'ci_low': round(lo, 4), 'ci_high': round(hi, 4),
+            'cluster_ci_low': round(clo, 4) if clo == clo else np.nan,
+            'cluster_ci_high': round(chi, 4) if chi == chi else np.nan,
             'seed_sd': round(per_seed.std(ddof=1), 4) if n_seeds > 1 else np.nan,
             'latency_ms': round(g['avg_latency_ms'].mean(), 1),
             'files': round(g['avg_file_count'].mean(), 1),
@@ -105,6 +114,9 @@ def table2(df: pd.DataFrame, protocol: str) -> pd.DataFrame:
             rec[name] = round(m, dp)
             rec[f'{name}_ci'] = f'[{lo:.{dp}f}, {hi:.{dp}f}]'
             rec[f'{name}_seed_sd'] = round(per_seed.std(ddof=1), dp)
+            if g['seed'].nunique() >= 2 and len(g) > g['seed'].nunique():
+                _, clo, chi = cluster_bootstrap_ci(g[col].values, g['seed'].values)
+                rec[f'{name}_cluster_ci'] = f'[{clo:.{dp}f}, {chi:.{dp}f}]'
         out.append(rec)
     return pd.DataFrame(out)
 

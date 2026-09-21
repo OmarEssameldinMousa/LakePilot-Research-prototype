@@ -1,0 +1,13 @@
+arm,n_seeds,n_episodes,mean,ci,cluster_ci,seed_sd,ep1,ep5,architecture
+"Table 1 (argmax, 15xxx)",5.0,25,0.2105,"[0.2050, 0.2155]","[0.2026, 0.2185]",0.0104,0.2049,0.2081,DDQN
+"frozen arm B (argmax, 25xxx)",,0,,,,,,,DDQN
+"frozen arm A (sampled, 25xxx)",5.0,25,0.208,"[0.2038, 0.2124]","[0.2040, 0.2140]",0.0068,0.1998,0.2146,DDQN
+adaptive (sampled + updates),5.0,25,0.2092,"[0.2034, 0.2151]","[0.2002, 0.2179]",0.0112,0.2029,0.2097,DDQN
+"Table 1 (argmax, 15xxx)",5.0,25,0.1675,"[0.1579, 0.1772]","[0.1481, 0.1870]",0.0254,0.1627,0.1605,MLP-PPO
+"frozen arm B (argmax, 25xxx)",5.0,25,0.168,"[0.1563, 0.1790]","[0.1479, 0.1881]",0.027,0.1775,0.1713,MLP-PPO
+"frozen arm A (sampled, 25xxx)",5.0,25,0.2035,"[0.1986, 0.2080]","[0.1962, 0.2104]",0.0093,0.205,0.2004,MLP-PPO
+adaptive (sampled + updates),5.0,25,0.2093,"[0.2041, 0.2141]","[0.2019, 0.2166]",0.0096,0.2174,0.2081,MLP-PPO
+"Table 1 (argmax, 15xxx)",5.0,25,0.1823,"[0.1669, 0.1963]","[0.1481, 0.2121]",0.0403,0.1759,0.1916,AttentivePPO-clip
+"frozen arm B (argmax, 25xxx)",,0,,,,,,,AttentivePPO-clip
+"frozen arm A (sampled, 25xxx)",5.0,25,0.2051,"[0.1918, 0.2137]","[0.1927, 0.2163]",0.0147,0.1804,0.2138,AttentivePPO-clip
+adaptive (sampled + updates),5.0,25,0.1998,"[0.1927, 0.2066]","[0.1943, 0.2054]",0.0071,0.1931,0.2057,AttentivePPO-clip

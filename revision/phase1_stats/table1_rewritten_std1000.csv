@@ -1,10 +1,10 @@
-rank,policy,reward,ci_low,ci_high,seed_sd,latency_ms,files,pruning,n_seeds,n_episodes,published_reward
-1,DDQN (hierarchical RL),0.2306,0.211,0.2463,0.0238,343.9,64.7,0.235,5,5,0.2196
-2,WorkloadAwareThreshold,0.2139,0.2079,0.2219,0.009,572.5,91.5,0.298,5,5,0.2111
-3,AttentivePPO-clip (hierarchical RL),0.1923,0.1564,0.2232,0.0421,498.1,89.7,0.241,5,5,0.2201
-4,AlwaysCompact_C128,0.187,0.1866,0.1873,0.0005,348.1,43.5,0.0,5,5,0.1869
-5,Threshold10_C128,0.1759,0.1756,0.1762,0.0004,330.7,46.3,0.0,5,5,0.1734
-6,MLP-PPO (hierarchical RL),0.1731,0.1508,0.1971,0.0294,637.2,127.7,0.251,5,5,0.2124
-7,Threshold10_C64,0.1284,0.1276,0.1291,0.001,570.8,88.4,0.0,5,5,
-8,CompactOnly (ablation),0.119,0.0836,0.1505,0.0428,548.0,94.0,0.0,5,5,0.1699
-9,AttentivePPO-AWR (published recipe),-0.094,-0.094,-0.094,,4686.4,1004.7,0.258,1,1,0.2201
+rank,policy,reward,ci_low,ci_high,cluster_ci_low,cluster_ci_high,seed_sd,latency_ms,files,pruning,n_seeds,n_episodes,published_reward
+1,DDQN (hierarchical RL),0.2306,0.211,0.2463,,,0.0238,343.9,64.7,0.235,5,5,0.2196
+2,WorkloadAwareThreshold,0.2139,0.2079,0.2219,,,0.009,572.5,91.5,0.298,5,5,0.2111
+3,AttentivePPO-clip (hierarchical RL),0.1923,0.1564,0.2232,,,0.0421,498.1,89.7,0.241,5,5,0.2201
+4,AlwaysCompact_C128,0.187,0.1866,0.1873,,,0.0005,348.1,43.5,0.0,5,5,0.1869
+5,Threshold10_C128,0.1759,0.1756,0.1762,,,0.0004,330.7,46.3,0.0,5,5,0.1734
+6,MLP-PPO (hierarchical RL),0.1731,0.1508,0.1971,,,0.0294,637.2,127.7,0.251,5,5,0.2124
+7,Threshold10_C64,0.1284,0.1276,0.1291,,,0.001,570.8,88.4,0.0,5,5,
+8,CompactOnly (ablation),0.119,0.0836,0.1505,,,0.0428,548.0,94.0,0.0,5,5,0.1699
+9,AttentivePPO-AWR (published recipe),-0.094,-0.094,-0.094,,,,4686.4,1004.7,0.258,1,1,0.2201

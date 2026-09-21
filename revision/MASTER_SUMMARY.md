@@ -308,3 +308,157 @@ why greedy meta-control fails where cooldown-based pacing succeeds.
 | 7 | Attention + parameter-matched MLP | `phase7_attention/SUMMARY.md` |
 | 8 | Manuscript & repo | `phase8_manuscript/CODE_VERIFICATION.md`, `ZENODO_CHECKLIST.md` |
 | — | Reproduction | `REPRODUCE.md` |
+
+---
+
+# PART D — Round 2 (second revision)
+
+Reviewer 1 recommended acceptance. Reviewer 2 raised nine points, seven of which
+share one cause: **eight sub-studies were run under five different evaluation
+protocols and their numbers were printed side by side without saying which was
+which.** Nothing was fabricated — every number has a manifest — but quantities
+that cannot be compared sat next to each other.
+
+## D1. The protocol registry (new manuscript Table 9)
+
+| Reported number | Protocol | Steps | Seeds × episodes | Env seeds | Action selection |
+|---|---|---|---|---|---|
+| 0.2105 DDQN (Table 1) | `eval500` | 500 | 5 × 5 | 15101–15505 | greedy argmax |
+| 0.2033 default (Table 5) | `eval500` | 500 | 3 × 1 | 15101/201/301 | greedy argmax |
+| 0.2005 scale 1.0 (Table 6) | `eval500` | 500 | 3 × 1 | same three | greedy argmax |
+| 0.2306 rule-based (Table 7) | `std1000` | 1,000 | 5 × 1 | 11001–11005 | greedy argmax |
+| 0.0546 oracle (Table 7) | `std1000` | 1,000 | 1 × 1 | **35101** | rollback oracle |
+| Table 9 adaptation | `eval500` plan | 500 | 5 × 5 consecutive | **25101–25505** | **sampled / ε-greedy** |
+
+## D2. Three errors found while auditing — none raised by the reviewer
+
+1. **The "frozen ceiling" column was not a ceiling.** Phase 1 evaluates with
+   deterministic argmax (`base_agent.py:118`); the adaptive runner explores —
+   PPO agents *sample* from their softmax, DDQN is ε-greedy
+   (`online_training.py:252-270`) — on a different env-seed block. MLP-PPO's
+   0.2093 vs 0.1675 therefore confounded learning with action selection.
+   **Fix:** `--frozen` / `--greedy` arms added to `revision_online_eval.py`;
+   control runs in `phase10_r2/frozen_raw`.
+2. **The oracle comparison was never paired.** 0.0546 is env_seed 35101; the
+   0.2306 beside it is the mean of block 11001–11005 — different workload
+   realisations. **Fix:** `--env-seed` added to `revision_phase1_eval.py`; the
+   paired comparator is 0.2265.
+3. **Episode pairing was a global intersection.** `analyze_phase1.py`
+   intersected env_seeds across *all* policies, so `PartitionOnly`'s 3 seeds
+   truncated every comparison to n=15 — which is why `significance_matrix.csv`
+   disagreed with manuscript Table 2 (δ +0.84 vs +0.71). **Fix:** pairing is
+   resolved per comparison. Table 2's δ values were right; its p-values are
+   regenerated (Holm ≤ 0.0020), and one δ was wrong: AttentivePPO vs the best
+   heuristic is **+0.10 negligible**, not −0.20.
+
+## D3. Cluster bootstrap (reviewer point 6)
+
+`stats_utils.cluster_bootstrap_ci` resamples the 5 training seeds with episodes
+nested. The headline survives the wider interval:
+
+| Policy | episode CI | seed-cluster CI |
+|---|---|---|
+| **DDQN** | [0.2050, 0.2155] | **[0.2026, 0.2185]** |
+| WorkloadAwareThreshold | [0.1923, 0.1964] | [0.1928, 0.1958] |
+| AttentivePPO-clip | [0.1669, 0.1963] | [0.1481, 0.2121] |
+| MLP-PPO | [0.1579, 0.1772] | [0.1481, 0.1870] |
+
+DDQN's cluster lower bound (0.2026) is above the best heuristic's cluster upper
+bound (0.1958). The Abstract now quotes the cluster interval. Seed-level paired
+test: all 5 seeds beat the heuristic (δ = +1.00), p = 0.0625 = the exact test's
+floor at n=5.
+
+## D4. Action coverage (reviewer point 7)
+
+| Pool | Min per-action count | Behaviour policies | File-count deciles covered |
+|---|---|---|---|
+| Compaction (17,000) | 1,556 | 6–12 | 9–10 of 10 |
+| Partition (4,990) | 336 | 2–3 | 9–10 of 10 |
+
+No action is unsupported, which is the condition under which CQL/IQL/BCQ
+pessimism would change the policy — the justification for their absence. Stated
+limits: coverage is not density, and the partition pool is thin (336–371 per
+action, 3 behaviour policies). New Limitation (viii).
+
+## D5. Query-latency decomposition (reviewer point 8) — `phase9_latency/`
+
+Data held constant (20,000 rows, 1.7 MB), file count varied 14 → 448:
+
+- `SELECT 1` floor: **55 ms**; single-row table: **93 ms**
+- **28–47 % of the latencies in Table 1 is fixed overhead** no policy can remove
+- above the floor, latency is affine in file count: `135 + 4.99 × files` ms,
+  **r = 0.999**
+
+The reviewer's premise about the floor is confirmed; their inference that the
+latency term is "largely constant" is not. The sharper problem is that **the
+latency and file-count reward terms are strongly collinear at this scale**, so
+the effective objective is tilted towards file count more than the nominal
+weights imply. Reported as a reward-decomposition defect at micro-scale.
+
+Also corrected: the table is 4.4 MB on *average*, peaking at 8.3 MB (13.8 MB
+unmaintained) — "reaches 4–5 MB" was the mean, not the peak.
+
+## D6. Control experiments (complete; `revision/run_r2_batch_v2.sh`, resumable)
+
+All runs finished 2026-09-18 01:05. **261 runs validated clean, 0 corrupted**
+(the validator now also covers `phase10_r2/` and the online runs).
+
+**Adaptation, decomposed (reviewer point 3).** Arm A = exploration on, updates
+off. Arm B = argmax, updates off. Both under the adaptation protocol, same
+checkpoints, same env seeds; frozen arms verified frozen (0 gradient updates,
+exactly 0.0 loss).
+
+| Architecture | Table 1 argmax | arm B argmax/25xxx | arm A sampled | adaptive |
+|---|---|---|---|---|
+| DDQN | 0.2105 | — | 0.2080 | 0.2092 |
+| MLP-PPO | 0.1675 | **0.1680** | **0.2035** | 0.2093 |
+| AttentivePPO-clip | 0.1823 | — | 0.2051 | 0.1998 |
+
+Paired contrasts, Holm-corrected across the family of four:
+
+| Contrast | Isolates | Δ | p_Holm | δ |
+|---|---|---|---|---|
+| DDQN adaptive − arm A | learning | +0.0012 | 0.67 | +0.08 |
+| MLP-PPO adaptive − arm A | learning | +0.0058 | 0.058 | +0.24 |
+| AttentivePPO adaptive − arm A | learning | −0.0053 | 0.67 | −0.30 |
+| **MLP-PPO arm A − arm B** | **action selection** | **+0.0355** | **0.0002** | **+0.72** |
+
+Arm B reproduces Table 1 to within 0.0005, so the env-seed block is irrelevant.
+**Adaptation is neutral for all three architectures** (no learning contrast
+survives correction); MLP-PPO's apparent gain was **stochastic action selection**,
+six times larger than any learning effect. Mechanism: under argmax MLP-PPO puts
+85 % of compactions on C32 (the target its specialist reward over-rewards and
+global reward punishes); sampling spreads them over C64/C128. The "% gap closed"
+metric is removed from the paper.
+
+**Ablation replicated on DDQN (reviewer point 5).**
+
+| Configuration | Reward | Δ vs full | Pruning | Files | Latency |
+|---|---|---|---|---|---|
+| Full DDQN | 0.2105 | — | 0.204 | 37.4 | 220 ms |
+| CompactOnly (5×5) | 0.1597 | −0.0507 | 0.000 | 32.4 | 222 ms |
+| PartitionOnly (3×1) | −0.1713 | −0.3766 | 0.030 | 1,117 | 4,278 ms |
+
+CompactOnly: p_Holm = 0.0001, δ = +1.00, 25 paired episodes, near-identical
+physical table → the whole gap is pruning. PartitionOnly collapses to 0.030
+pruning (vs 0.080 for AttentivePPO), confirming the mechanism on the headline
+architecture. Run at 1 episode/seed because the collapse is forced by the
+environment (`simulation.py:915-938`, `:1107`), not by the agent; n=3 → the
+permutation floor is p=0.25, reported as effect size, not a test.
+
+**Oracle now paired (reviewer point 2).** Replayed the rule-based agent on the
+oracle's own env_seed 35101: **0.2435** vs the oracle's 0.0546 — a wider margin
+than the unpaired 0.2306 previously quoted.
+
+## D7. Other corrections
+
+Removed the "% gap closed" metric entirely (it had drawn a comment in both
+rounds, and Table 9 printed "n/a" where the guard would not have fired).
+Corrected the documented table schema, which named three columns the table does
+not have (`device_id`/`timestamp`/`sensor_value` → `event_ts`/`sensor_id`/
+`status`). Fixed two figure captions that described plots other than the ones
+shown, four cross-references that printed as "Section .", and the
+hyperparameter table's clip column. Added causal-confusion and copycat
+citations, repositioning the leakage finding as a specialisation rather than a
+new phenomenon. New: `stats/audit_manuscript_numbers.py` (61 checks against
+source CSVs) and `manuscript/renumber_refs.py --check`.

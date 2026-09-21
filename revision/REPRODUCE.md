@@ -92,6 +92,45 @@ docker exec -w /app/src lakegym-lite python3 revision_phase7_attention.py \
     --weights-label attentive_ppoclip --seeds 1 2 3
 ```
 
+### Round-2 revision runs
+
+Added for the second revision. `revision/run_r2_batch.sh` runs all of them in
+order and is resumable; the individual commands are below.
+
+```bash
+# Phase 9 — query-latency decomposition (fixed overhead vs per-file scan cost).
+# Holds the data constant and varies only the number of files it occupies.
+docker exec -w /app/src lakegym-lite python3 revision_bench_query_latency.py \
+    --rows 20000 --batch 200 --reps 30 --out /app/revision/phase9_latency
+
+# Phase 10 — frozen control under the ADAPTIVE protocol. Same env-seed block
+# (25101-25505) and checkpoints as the Phase 6 adaptive runs, weight updates
+# disabled. --greedy additionally restores Phase 1's deterministic argmax.
+docker exec -w /app/src lakegym-lite python3 revision_online_eval.py \
+    --model-type mlp_ppo --frozen \
+    --compact-weights  $W/compaction_mlp_ppo_seed{seed}.weights.h5 \
+    --partition-weights $W/partition_mlp_ppo_seed{seed}.weights.h5 \
+    --seeds 1 2 3 4 5 --episodes 5 \
+    --label frozen_mlp_ppo --out /app/revision/phase10_r2/frozen_raw
+
+# Phase 10 — ablation replicated on DDQN (the published ablation used
+# AttentivePPO-clip).
+docker exec -w /app/src lakegym-lite python3 revision_phase1_eval.py \
+    --policy CompactOnlyRL --model-type ddqn \
+    --compact-weights $W/compaction_ddqn_seed{seed}.weights.h5 \
+    --seeds 1 2 3 4 5 --protocols eval500 \
+    --label CompactOnlyRL_ddqn --out /app/revision/phase10_r2/ablation_raw
+
+# Phase 10 — paired comparator for the oracle (the oracle ran on env_seed 35101;
+# --env-seed replays the rule-based agent on that same realisation).
+docker exec -w /app/src lakegym-lite python3 revision_phase1_eval.py \
+    --policy MultiAgentRL --model-type ddqn \
+    --compact-weights  $W/compaction_ddqn_seed{seed}.weights.h5 \
+    --partition-weights $W/partition_ddqn_seed{seed}.weights.h5 \
+    --seeds 1 --protocols std1000 --env-seed 35101 \
+    --label MultiAgentRL_ddqn_oracleseed --out /app/revision/phase10_r2/oracle_raw
+```
+
 ## 4. Validate, then analyse
 
 **Always validate first.** A Spark driver crash does not raise inside the
@@ -111,6 +150,12 @@ python3 revision/stats/analyze_phase5.py             # generalization / degradat
 python3 revision/stats/analyze_phase7_attention.py   # attention profile + transitions
 python3 revision/phase2_compute/build_training_cost_table.py
 python3 revision/phase2_compute/build_cost_model.py
+
+# round-2 additions
+python3 revision/stats/analyze_action_coverage.py    # offline-pool action coverage
+python3 revision/stats/analyze_phase9_latency.py     # fixed overhead vs scan cost
+python3 revision/stats/analyze_phase10_frozen.py     # frozen control vs adaptation
+python3 revision/manuscript/renumber_refs.py --check  # citation numbering validator
 ```
 
 Inference benchmark (needs an idle machine):
@@ -148,7 +193,9 @@ revision/
 ├── phase5_generalization/    drift / mixed held-out workloads
 ├── phase6_ddqn/              online adaptation  + ONLINE_DESIGN.md
 ├── phase7_attention/         attention analysis + parameter-matched MLP
-└── phase8_manuscript/        code verification, Zenodo checklist
+├── phase8_manuscript/        code verification, Zenodo checklist
+├── phase9_latency/           query-latency decomposition (round 2)
+└── phase10_r2/               frozen control, DDQN ablation, paired oracle (round 2)
 ```
 
 Every phase directory contains a `SUMMARY.md` with its numbers and verdicts.

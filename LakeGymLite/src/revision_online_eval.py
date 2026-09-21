@@ -97,7 +97,10 @@ def run_seed(args, slot: int, plan: dict, steps: int) -> None:
         return p.replace('{seed}', str(slot)) if p else None
 
     manifest = {
-        'status': 'running', 'label': args.label, 'mode': mode,
+        'status': 'running', 'label': args.label,
+        'mode': 'frozen_control' if args.frozen else mode,
+        'weight_updates': not args.frozen,
+        'action_selection': 'greedy_argmax' if args.greedy else 'sampled_or_epsilon_greedy',
         'model_type': args.model_type, 'seed_slot': slot,
         'compact_weights': fill(args.compact_weights),
         'partition_weights': fill(args.partition_weights),
@@ -156,7 +159,7 @@ def run_seed(args, slot: int, plan: dict, steps: int) -> None:
         obs_dict = sim.get_observation()
         t0 = time.time()
         for step in range(1, steps + 1):
-            info = trainer.step(sim, obs_dict, greedy=False)   # explore while learning
+            info = trainer.step(sim, obs_dict, greedy=args.greedy)
             result, next_obs = info['result'], info['next_obs_dict']
             done = (step == steps)
 
@@ -176,8 +179,9 @@ def run_seed(args, slot: int, plan: dict, steps: int) -> None:
             actions.append(result.action_taken)
             obs_dict = next_obs
 
-            # mid-episode updates
-            if args.update_every > 0 and (len(cbuf) + len(pbuf)) >= args.update_every:
+            # mid-episode updates (never in the frozen control arm)
+            if (not args.frozen and args.update_every > 0
+                    and (len(cbuf) + len(pbuf)) >= args.update_every):
                 m = trainer.update_models(cbuf, pbuf)
                 losses['compaction'] += m['compaction'].get('loss', 0.0)
                 losses['partition'] += m['partition'].get('loss', 0.0)
@@ -189,7 +193,7 @@ def run_seed(args, slot: int, plan: dict, steps: int) -> None:
                       f'files={result.file_count} R={result.global_reward:+.3f}', flush=True)
 
         # end-of-episode update (published cadence, and flushes any remainder)
-        if len(cbuf) or len(pbuf):
+        if not args.frozen and (len(cbuf) or len(pbuf)):
             m = trainer.update_models(cbuf, pbuf)
             losses['compaction'] += m['compaction'].get('loss', 0.0)
             losses['partition'] += m['partition'].get('loss', 0.0)
@@ -255,6 +259,20 @@ def main():
     ap.add_argument('--epsilon-end', type=float, default=0.02)
     ap.add_argument('--epsilon-decay-steps', type=int, default=200,
                     help='decay horizon in specialist transitions')
+    # ── Round-2 frozen control ────────────────────────────────────────────
+    # Reviewer 2 observed that the adaptive means sit far above the "frozen
+    # ceiling" taken from the Phase 1 table, and that the ep1->ep5 column cannot
+    # detect a gain already present at episode 1. The two columns were not
+    # comparable: Phase 1 evaluates with a deterministic argmax
+    # (revision_phase1_eval.py builds the policy with stochastic=False), whereas
+    # this runner explores -- PPO agents SAMPLE from their softmax and DDQN acts
+    # epsilon-greedily. --frozen runs this protocol with weight updates disabled,
+    # isolating adaptation from action selection; --greedy additionally switches
+    # action selection to argmax, isolating the environment-seed block.
+    ap.add_argument('--frozen', action='store_true',
+                    help='disable all weight updates (control arm for adaptation)')
+    ap.add_argument('--greedy', action='store_true',
+                    help='deterministic argmax action selection, as in Phase 1')
     ap.add_argument('--label', required=True)
     ap.add_argument('--out', default='/app/revision/phase6_ddqn/online_raw')
     args = ap.parse_args()
